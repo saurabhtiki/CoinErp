@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     # third party
     "django_htmx",
     "django_tailwind_cli",
+    "django_datatable",
     "axes",
     "django_otp",
     "django_otp.plugins.otp_totp",

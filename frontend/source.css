@@ -1,2 +1,8 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+/* django-datatable templates live inside the installed package, so Tailwind must look there too.
+   One line per place the package can be installed: Windows dev, Linux/Mac dev, Docker. */
+@source "../.venv/Lib/site-packages/django_datatable/templates";
+@source "../.venv/lib/*/site-packages/django_datatable/templates";
+@source "/opt/venv/lib/*/site-packages/django_datatable/templates";

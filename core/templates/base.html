@@ -1,0 +1,27 @@
+{% load static tailwind_cli django_htmx %}<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Home{% endblock %} · Group ERP</title>
+  {% tailwind_css %}
+  <link href="{% static 'django_datatable/datatable.css' %}" rel="stylesheet">
+  {% htmx_script %}
+  <script defer src="{% static 'django_datatable/datatable.js' %}"></script>
+  <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
+</head>
+<body class="min-h-screen bg-base-200" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  {# Simple top bar. Step 5 replaces it with the sidebar built from the app registry. #}
+  <header class="navbar bg-base-100 shadow-sm px-4 gap-2">
+    <a href="{% url 'core:home' %}" class="btn btn-ghost text-lg" title="Home">Group ERP</a>
+    <div class="flex-1"></div>
+    <span class="text-sm text-base-content/70 hidden sm:inline">{{ request.user.get_full_name|default:request.user.email }}</span>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+      <button type="submit" class="btn btn-ghost btn-sm" title="Sign out of Group ERP">Sign out</button>
+    </form>
+  </header>
+  <main class="p-4 max-w-7xl mx-auto">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

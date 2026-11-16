@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "django>=5.2,<6",
     "django-axes>=9.0.0",
+    "django-datatable",
     "django-environ>=0.14.0",
     "django-htmx>=1.29.0",
     "django-otp>=1.7.5",
@@ -24,3 +25,6 @@ dev = [
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["test_*.py"]
 testpaths = ["tests", "core", "apps"]
+
+[tool.uv.sources]
+django-datatable = { git = "https://github.com/saurabhtiki/django-datatable" }

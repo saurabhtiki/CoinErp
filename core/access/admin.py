@@ -1,0 +1,54 @@
+"""Admin base classes that apply the access layer, so admin screens follow the same rules as app screens.
+
+- Only users whose role opens the model's app see it in admin.
+- Lists and dropdowns show only rows of the user's companies (and own rows, if their role says so).
+- "Created by" is filled in automatically.
+"""
+from django.contrib import admin
+
+from . import services
+from .models import BaseModel
+
+
+class AppAccessAdminMixin:
+    """Admin rights come from the user's roles, not from Django's per-model tick boxes."""
+
+    def _can_open_app(self, request):
+        return services.user_can_open_app(request.user, self.model._meta.app_label)
+
+    def has_module_permission(self, request):
+        return self._can_open_app(request)
+
+    def has_view_permission(self, request, obj=None):
+        return self._can_open_app(request)
+
+    def has_add_permission(self, request):
+        return self._can_open_app(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self._can_open_app(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._can_open_app(request)
+
+
+class AccessModelAdmin(AppAccessAdminMixin, admin.ModelAdmin):
+    """Use for every model built on BaseModel."""
+
+    readonly_fields = ("created_by", "created_at", "updated_at")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).for_user(request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        related_model = db_field.remote_field.model
+        if db_field.name == "company":
+            kwargs["queryset"] = services.allowed_companies(request.user)
+        elif issubclass(related_model, BaseModel):
+            kwargs["queryset"] = related_model.objects.for_user(request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

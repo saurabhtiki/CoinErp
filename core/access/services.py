@@ -7,7 +7,8 @@ Rules (example: Ravi works for ACME, role "Tasks clerk" = app "tasks", own recor
    created in that app (Ravi: only his own tasks).
 4. A user may open an app only if one of their roles lists it.
 """
-from core.masters.models import Company
+from django.apps import apps
+from django.conf import settings
 
 
 def _is_usable(user):
@@ -16,11 +17,22 @@ def _is_usable(user):
 
 def allowed_companies(user):
     """Companies the user may see or pick in a form."""
+    Company = apps.get_model("masters", "Company")
     if not _is_usable(user):
         return Company.objects.none()
     if user.is_superuser:
         return Company.objects.all()
     return user.companies.all()
+
+
+def allowed_users(user):
+    """Users the user may pick in a form: people who share at least one of their companies."""
+    User = apps.get_model(settings.AUTH_USER_MODEL)
+    if not _is_usable(user):
+        return User.objects.none()
+    if user.is_superuser:
+        return User.objects.all()
+    return User.objects.filter(companies__in=user.companies.all()).distinct()
 
 
 def user_can_open_app(user, app_code):
@@ -54,3 +66,8 @@ def visible_rows(queryset, user):
     if user_sees_own_records_only(user, queryset.model.access_app_code()):
         queryset = queryset.filter(created_by=user)
     return queryset
+
+
+def can_view_bank_details(user):
+    """Vendor/customer bank fields are shown only with the "view bank details" permission."""
+    return _is_usable(user) and user.has_perm("masters.view_bank_details")

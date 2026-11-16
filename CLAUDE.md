@@ -2,7 +2,7 @@
 
 Group ERP platform (see `project.md`): one shared `core` + plug-in apps in `apps/`. Keep each app self-contained so it could be reused elsewhere.
 
-Current phase: Phase 1 Foundation, Steps 1–3 done (skeleton, login, access layer); next Step 4 (masters). Plan: `docs/plan.md`.
+Current phase: Phase 1 Foundation, Steps 1–4 done (skeleton, login, access layer, masters); next Step 5 (layout, registry, dashboard). Plan: `docs/plan.md`.
 
 
 

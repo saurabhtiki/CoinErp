@@ -1,4 +1,4 @@
-# Plan: Phase 1 — Foundation (confirmed; Steps 1–3 done)
+# Plan: Phase 1 — Foundation (confirmed; Steps 1–4 done)
 
 Goal: a working, secure shell of the ERP. Users can log in, see only their companies,
 and see a sidebar + home dashboard. No business apps yet.
@@ -48,6 +48,11 @@ We build it in 5 small steps. Each step = code + tests + Git commit, and I stop 
 - Vendor, Customer (company, name, tax IDs, contact, bank details)
 - Managed via Django admin first; list screens with `django-datatable`.
 - Format checks: PAN, GSTN, etc. (example: PAN = `ABCDE1234F`).
+- Built: models in `core/masters/models.py`, ID checks in `fields.py` (also: GSTN must contain the PAN,
+  codes unique per company, linked records must be from the same company, photo JPG/PNG up to 2 MB).
+  Admin goes through `core/access/admin.py` (rights from roles: app code `masters`). Bank details need
+  the `masters.view_bank_details` permission. One list screen for all masters at `/masters/<name>/`.
+  A simple `base.html` was added for the list screens; Step 5 adds the sidebar.
 
 ## Step 5. Layout, registry, dashboard
 

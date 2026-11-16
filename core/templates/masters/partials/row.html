@@ -1,0 +1,4 @@
+{% load table_tags %}<tr>
+  {% for column in table.columns %}<td data-dt-col="{{ column.name }}"{% if forloop.first %} class="dt-sticky"{% endif %}>{{ row|cell:column|default:"—" }}</td>{% endfor %}
+  <td class="text-right"><a href="{% url change_url_name row.pk %}" class="btn btn-ghost btn-xs" title="Edit this record">Edit</a></td>
+</tr>
