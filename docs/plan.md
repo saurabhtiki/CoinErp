@@ -1,4 +1,4 @@
-# Plan: Phase 1 — Foundation (confirmed; Steps 1–5 done)
+# Plan: Phase 1 — Foundation (confirmed; done, Steps 1–5 + review fixes)
 
 Goal: a working, secure shell of the ERP. Users can log in, see only their companies,
 and see a sidebar + home dashboard. No business apps yet.
