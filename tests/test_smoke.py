@@ -22,6 +22,7 @@ def test_home_opens_for_logged_in_user(client):
     assert b"Group ERP" in response.content
 
 
+@pytest.mark.django_db
 def test_health_check_needs_no_login(client):
     response = client.get(reverse("core:healthz"))
 

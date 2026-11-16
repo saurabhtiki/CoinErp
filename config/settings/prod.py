@@ -1,8 +1,11 @@
 """Staging and production servers (behind Caddy, which does HTTPS). Everything comes from .env."""
 from .base import *  # noqa: F401,F403
-from .base import SILENCED_SYSTEM_CHECKS, env
+from .base import ALLOWED_HOSTS, SILENCED_SYSTEM_CHECKS, env
 
 DEBUG = False
+
+# The Docker health check and deploy.sh call the app as 127.0.0.1 from the same machine.
+ALLOWED_HOSTS = [*ALLOWED_HOSTS, "127.0.0.1"]
 
 # Caddy tells us the visitor used https. The app port is open on 127.0.0.1 only, so only Caddy can say so.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
