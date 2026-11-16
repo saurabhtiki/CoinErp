@@ -53,7 +53,7 @@ Put the hash in `SANDBOX_PASSWORD_HASH` (keep the single quotes). Fill `ACME_EMA
 ```bash
 docker compose -f docker/caddy/compose.yml up -d
 ```
-Caddy gets the certificates by itself and renews them. Open both sites in a browser to check.
+Caddy runs on the host network (Linux server only), so it can reach the apps on 127.0.0.1. It gets the certificates by itself and renews them. Open both sites in a browser to check.
 
 ## 6. Raise HSTS
 HSTS starts at 1 hour so a mistake is easy to undo. When HTTPS has worked for a week, set `SECURE_HSTS_SECONDS=31536000` in `.env.prod` and run `sh docker/deploy.sh prod`.

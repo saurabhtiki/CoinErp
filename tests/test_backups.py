@@ -208,3 +208,25 @@ def test_download_of_a_removed_or_missing_file_is_404(client, boss):
     services.backup_path(record).unlink()
     client.force_login(boss)
     assert client.get(f"/backups/{record.pk}/download/").status_code == 404
+
+
+@pytest.mark.django_db
+def test_unexpected_error_marks_backup_failed_not_running(settings, tmp_path, monkeypatch):
+    settings.BACKUP_ROOT = tmp_path
+    record = BackupRecord.objects.create(kind=BackupRecord.Kind.AUTO)
+
+    def explode(target):
+        raise UnicodeError("odd file name")
+
+    monkeypatch.setattr("core.backups.services._build_zip", explode)
+    services.run_backup(record.pk)
+    record.refresh_from_db()
+    assert record.status == BackupRecord.Status.FAILED and "odd file name" in record.error
+
+
+@pytest.mark.django_db
+def test_retention_removes_leftover_partial_files(settings, tmp_path):
+    settings.BACKUP_ROOT = tmp_path
+    (tmp_path / "backup-old.partial").write_bytes(b"half")
+    services.apply_retention()
+    assert not (tmp_path / "backup-old.partial").exists()

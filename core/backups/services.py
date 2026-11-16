@@ -8,7 +8,6 @@ Restoring is done only on the server with docker/restore_backup.sh.
 """
 import logging
 import os
-import sqlite3
 import subprocess
 import tempfile
 import zipfile
@@ -78,7 +77,7 @@ def run_backup(record_id):
     try:
         _build_zip(partial)
         partial.rename(backup_path(record))
-    except (OSError, sqlite3.Error, subprocess.SubprocessError, zipfile.BadZipFile, BackupError) as error:
+    except Exception as error:  # noqa: BLE001 - job boundary: any failure is saved and alerted, never left "running"
         logger.error("Backup %s failed: %s", record.pk, error, exc_info=True)
         partial.unlink(missing_ok=True)
         record.status, record.error = Status.FAILED, str(error)[:1000] or type(error).__name__
@@ -161,6 +160,8 @@ def files_to_keep(records, daily, weekly):
 
 def apply_retention():
     """Delete the files of backups outside the keep rules. Their rows stay, marked Removed, with the download history."""
+    for leftover in backup_folder().glob("*.partial"):  # from a run that was killed half way
+        leftover.unlink(missing_ok=True)
     finished = list(BackupRecord.objects.filter(status=Status.OK))
     keep_ids = {record.pk for record in files_to_keep(finished, settings.BACKUP_KEEP_DAILY, settings.BACKUP_KEEP_WEEKLY)}
     for record in finished:

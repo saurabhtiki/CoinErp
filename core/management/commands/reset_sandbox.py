@@ -34,7 +34,12 @@ class Command(BaseCommand):
             )
         if not options["yes"]:
             raise CommandError("This deletes ALL sandbox data and uploaded files. Run again with --yes to confirm.")
+        if not settings.DEMO_PASSWORD:
+            raise CommandError("Set DEMO_PASSWORD in the sandbox .env first. The demo users must not use a password from the source code.")
         call_command("flush", interactive=False, verbosity=0)
         clear_folder(settings.MEDIA_ROOT)
+        clear_folder(settings.BACKUP_ROOT)  # the backup records were just flushed
+        call_command("setup_task_jobs", verbosity=0)  # flush also deleted the daily jobs
+        call_command("setup_backup_jobs", verbosity=0)
         load_demo_data()
         self.stdout.write(self.style.SUCCESS("Sandbox reset: old data wiped, fresh demo data loaded."))

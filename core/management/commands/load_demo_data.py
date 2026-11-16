@@ -10,6 +10,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if settings.ENVIRONMENT == "production":
             raise CommandError("Refused: this is the production server. Demo data is for the sandbox only.")
+        if settings.ENVIRONMENT == "sandbox" and not settings.DEMO_PASSWORD:
+            raise CommandError("Set DEMO_PASSWORD in the sandbox .env first. The demo users must not use a password from the source code.")
         try:
             people = load_demo_data()
         except DemoDataExists as error:

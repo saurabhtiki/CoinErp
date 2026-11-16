@@ -17,7 +17,7 @@
 		file_server
 	}
 	# Uploaded files are NOT served here: they go through Django's permission-checked view.
-	reverse_proxy host.docker.internal:{args[0]}
+	reverse_proxy 127.0.0.1:{args[0]}
 }
 
 {$PROD_DOMAIN} {
@@ -26,7 +26,8 @@
 
 # The sandbox asks for an extra shared password before the ERP login page.
 {$SANDBOX_DOMAIN} {
-	basic_auth {
+	@not_health not path /healthz/  # uptime monitors can check health without the shared password
+	basic_auth @not_health {
 		{$SANDBOX_USER} {$SANDBOX_PASSWORD_HASH}
 	}
 	import app 8001 /srv/static-sandbox

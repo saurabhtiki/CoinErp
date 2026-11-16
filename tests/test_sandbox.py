@@ -19,6 +19,7 @@ User = get_user_model()
 def sandbox(settings):
     settings.ENVIRONMENT = "sandbox"
     settings.IS_SANDBOX = True
+    settings.DEMO_PASSWORD = "a-test-demo-password-1"
 
 
 @pytest.fixture(autouse=True)
@@ -154,7 +155,9 @@ def test_reset_sandbox_needs_confirmation(sandbox):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_reset_sandbox_wipes_old_data_and_files_then_loads_demo_data(sandbox, tmp_path):
+def test_reset_sandbox_wipes_old_data_and_files_then_loads_demo_data(sandbox, tmp_path, settings):
+    settings.MEDIA_ROOT = tmp_path
+    settings.BACKUP_ROOT = tmp_path / "backups"
     Company.objects.create(name="Old Co", code="OLD")
     (tmp_path / "old-upload.pdf").write_bytes(b"%PDF-1.4 old")
 
@@ -163,3 +166,22 @@ def test_reset_sandbox_wipes_old_data_and_files_then_loads_demo_data(sandbox, tm
     assert not Company.objects.filter(code="OLD").exists()
     assert Company.objects.filter(code=DEMO_COMPANY_CODE).exists()
     assert not (tmp_path / "old-upload.pdf").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reset_sandbox_brings_back_the_daily_jobs(sandbox, tmp_path, settings):
+    from django_q.models import Schedule
+
+    settings.MEDIA_ROOT = tmp_path
+    settings.BACKUP_ROOT = tmp_path / "backups"
+    call_command("reset_sandbox", yes=True)
+    assert Schedule.objects.filter(name="backups: daily backup").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_sandbox_demo_data_needs_its_own_password(sandbox, settings):
+    settings.DEMO_PASSWORD = ""
+    with pytest.raises(CommandError, match="DEMO_PASSWORD"):
+        call_command("reset_sandbox", yes=True)
+    with pytest.raises(CommandError, match="DEMO_PASSWORD"):
+        call_command("load_demo_data")

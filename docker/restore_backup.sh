@@ -12,6 +12,7 @@ ZIP_FILE="${1:-}"
 PROJECT="${PROJECT:-coinerp-prod}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE="docker compose -p $PROJECT --env-file $ENV_FILE -f docker/compose.yml"
+unset ENV_FILE  # compose reads its own ENV_FILE (../.env.prod) from the env file; ours would override it
 
 if [ -z "$ZIP_FILE" ] || [ ! -f "$ZIP_FILE" ]; then
     echo "Usage: PROJECT=... ENV_FILE=... sh docker/restore_backup.sh <backup.zip>" >&2
@@ -33,7 +34,7 @@ ZIP_NAME="$(basename "$ZIP_FILE")"
 
 echo "Stopping the app (the database stays up)..."
 $COMPOSE up -d db
-$COMPOSE stop nginx worker web
+$COMPOSE stop worker web
 
 echo "Restoring..."
 $COMPOSE run --rm --no-deps --entrypoint sh -v "$ZIP_DIR:/restore:ro" web -c '

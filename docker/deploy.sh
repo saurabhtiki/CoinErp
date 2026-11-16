@@ -21,8 +21,8 @@ git pull --ff-only
 
 echo "2/4 Taking a backup first (so you can go back)..."
 if $COMPOSE ps --status running web | grep -q web; then
-  $COMPOSE exec -T web python manage.py shell -c "from core.backups.services import start_backup; start_backup()" \
-    || echo "Backup could not start (maybe one is already running). Continuing."
+  $COMPOSE exec -T web python manage.py shell -c "from core.backups.services import start_backup, run_backup; run_backup(start_backup().pk)" \
+    || { echo "Backup FAILED, so nothing was updated. Fix this first (or wait if a backup is running)."; exit 1; }
 else
   echo "Server is not running yet, nothing to back up."
 fi

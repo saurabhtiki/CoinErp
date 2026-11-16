@@ -8,12 +8,9 @@ services:
   caddy:
     image: caddy:2-alpine
     env_file: ../../.env.edge
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # reach the apps, which listen on this machine's 127.0.0.1
+    # Host network (Linux server): Caddy owns ports 80/443 and reaches the apps on this machine's 127.0.0.1.
+    # (The apps listen on 127.0.0.1 only, which a normal Docker network cannot reach on Linux.)
+    network_mode: host
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - prod_static:/srv/static-prod:ro
