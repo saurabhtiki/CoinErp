@@ -3,7 +3,9 @@
 {% block content %}
 <div class="flex flex-wrap items-center gap-2 mb-4">
   <h1 class="text-2xl font-bold flex-1">{{ title }}</h1>
-  <a href="{% url add_url_name %}" class="btn btn-primary btn-sm" title="Add a new record in the admin screen">Add</a>
+  {% if can_edit %}
+    <a href="{% url add_url_name %}" class="btn btn-primary btn-sm" title="Add a new record in the admin screen">Add</a>
+  {% endif %}
 </div>
 <div role="tablist" class="tabs tabs-box mb-4 overflow-x-auto flex-nowrap">
   {% for slug, master in master_lists.items %}

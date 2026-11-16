@@ -304,3 +304,84 @@ def test_employee_login_dropdown_lists_only_colleagues(client, acme, globex):
 
     assert b"Ravi Colleague" in content
     assert b"Ravi Outsider" not in content
+
+
+# --- Review fixes -----------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_admin_company_choice_only_where_role_opens_masters(client, acme, globex):
+    user = make_user("staff@example.com", [acme], is_staff=True)
+    travel_only = Role.objects.create(name="Travel only", allowed_apps=["travel"])
+    CompanyRole.objects.create(user=user, company=globex, role=travel_only)
+    client.force_login(user)
+
+    add_page = client.get("/admin/masters/vendor/add/").content
+    client.post("/admin/masters/vendor/add/", {"company": globex.pk, "name": "Sneaky Co", "is_active": "on"})
+
+    assert b"Acme" in add_page and b"Globex" not in add_page
+    assert not Vendor.objects.filter(name="Sneaky Co").exists()
+    assert b"Globex" not in client.get("/masters/companies/").content
+
+
+@pytest.mark.django_db
+def test_only_superuser_changes_company_details(client, acme):
+    staff_user(client, [acme])
+
+    client.post(f"/admin/masters/company/{acme.pk}/change/", {"name": "Acme", "code": "ACME", "pan": "ZZZZZ9999Z"})
+
+    acme.refresh_from_db()
+    assert acme.pan == ""
+    assert client.get(f"/admin/masters/company/{acme.pk}/change/").status_code == 200  # can still view
+
+
+@pytest.mark.django_db
+def test_list_has_no_add_or_edit_for_non_staff(client, acme):
+    client.force_login(make_user("ravi@example.com", [acme]))
+    Branch.objects.create(company=acme, name="Pune", code="PUN")
+
+    content = client.get("/masters/branches/").content
+
+    assert b"Pune" in content
+    assert b"/admin/masters/branch/" not in content
+
+
+@pytest.mark.django_db
+def test_list_has_add_and_edit_for_staff(client, acme):
+    staff_user(client, [acme])
+    Branch.objects.create(company=acme, name="Pune", code="PUN")
+
+    content = client.get("/masters/branches/").content
+
+    assert b"/admin/masters/branch/add/" in content
+    assert b"/change/" in content
+
+
+@pytest.mark.django_db
+def test_employee_login_must_have_role_in_that_company(acme, globex):
+    globex_only = make_user("outsider@example.com", [globex])
+
+    with pytest.raises(ValidationError) as error:
+        Employee(company=acme, employee_code="E1", first_name="Asha", user=globex_only).full_clean()
+
+    assert "has no role in Acme" in error.value.message_dict["user"][0]
+
+
+@pytest.mark.django_db
+def test_reporting_loop_is_rejected(acme):
+    asha = Employee.objects.create(company=acme, employee_code="E1", first_name="Asha")
+    bina = Employee.objects.create(company=acme, employee_code="E2", first_name="Bina", reports_to=asha)
+    chetan = Employee.objects.create(company=acme, employee_code="E3", first_name="Chetan", reports_to=bina)
+    asha.reports_to = chetan
+
+    with pytest.raises(ValidationError, match="already reports"):
+        asha.full_clean()
+
+
+@pytest.mark.django_db
+def test_branch_gstn_must_carry_company_pan():
+    acme = Company.objects.create(name="Acme", code="ACME", pan="ABCDE1234F")
+
+    Branch(company=acme, name="Pune", code="PUN", gstn="27ABCDE1234F1Z5").full_clean()
+    with pytest.raises(ValidationError, match="does not belong to PAN ABCDE1234F"):
+        Branch(company=acme, name="Delhi", code="DEL", gstn="07ZZZZZ9999Z1Z5").full_clean()

@@ -258,3 +258,43 @@ def test_external_user_cannot_open_admin_even_if_staff(client):
 
     assert response.status_code == 302
     assert response.url.startswith("/admin/login/")
+
+
+@pytest.mark.django_db
+def test_inviting_existing_email_in_other_case_shows_error_not_crash(client):
+    make_user(email="ravi@example.com")
+    verified_admin(client)
+
+    response = client.post(
+        reverse("admin:accounts_user_add"),
+        {"email": "Ravi@Example.com", "first_name": "Ravi", "last_name": "", "is_external": ""},
+    )
+
+    assert response.status_code == 200
+    assert b"User with this Email address already exists" in response.content
+    assert User.objects.filter(email="ravi@example.com").count() == 1
+
+
+@pytest.mark.django_db
+def test_2fa_skip_list_uses_full_view_names():
+    from core.accounts.middleware import OPEN_VIEW_NAMES
+
+    assert "healthz" not in OPEN_VIEW_NAMES and "otp_verify" not in OPEN_VIEW_NAMES
+    assert reverse("core:healthz") and reverse("accounts:otp_verify")  # the listed names really exist
+
+
+@pytest.mark.django_db
+def test_normal_page_costs_one_role_query_for_2fa_and_sidebar(client, django_assert_max_num_queries):
+    user = make_user()
+    CompanyRole.objects.create(
+        user=user, company=Company.objects.create(name="Acme", code="ACME"),
+        role=Role.objects.create(name="Clerk", allowed_apps=["masters"]),
+    )
+    client.force_login(user)
+
+    with django_assert_max_num_queries(8) as captured:
+        client.get("/")
+
+    role_queries = [q for q in captured.captured_queries if "accounts_companyrole" in q["sql"]
+                    and "requires_2fa" in q["sql"]]
+    assert len(role_queries) == 1

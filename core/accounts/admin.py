@@ -1,18 +1,19 @@
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
+from core.access.services import can_use_admin
+
 from . import services
-from .forms import UserInviteForm
+from .forms import UserEditForm, UserInviteForm
 from .models import CompanyRole, Role, User
 
 
-def staff_only_has_permission(request):
-    """External users never get the admin site, even if someone ticks 'staff'."""
-    user = request.user
-    return user.is_active and user.is_staff and not user.is_external
+def admin_site_permission(request):
+    """External users never get the admin site, even if someone ticks 'staff' (rule in the access layer)."""
+    return can_use_admin(request.user)
 
 
-admin.site.has_permission = staff_only_has_permission
+admin.site.has_permission = admin_site_permission
 admin.site.site_header = "Group ERP admin"
 
 
@@ -34,6 +35,7 @@ class CompanyRoleInline(admin.TabularInline):
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     add_form = UserInviteForm
+    form = UserEditForm
     add_fieldsets = [(None, {"fields": ["email", "first_name", "last_name", "is_external"]})]
     fieldsets = [
         (None, {"fields": ["email", "password"]}),

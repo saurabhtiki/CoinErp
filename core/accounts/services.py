@@ -23,13 +23,6 @@ def lockout_username(request, credentials=None):
     return username.strip().lower()
 
 
-def user_needs_2fa(user):
-    """Superusers always need 2FA; others only if one of their roles says so."""
-    if not user.is_authenticated:
-        return False
-    return user.is_superuser or user.company_roles.filter(role__requires_2fa=True).exists()
-
-
 def user_has_2fa_device(user):
     return user_has_device(user, confirmed=True)
 

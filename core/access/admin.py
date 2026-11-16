@@ -2,6 +2,7 @@
 
 - Only users whose role opens the model's app see it in admin.
 - Lists and dropdowns show only rows of the user's companies (and own rows, if their role says so).
+- The company choice lists only companies where the user's role opens the model's app.
 - "Created by" is filled in automatically.
 """
 from django.contrib import admin
@@ -43,7 +44,7 @@ class AccessModelAdmin(AppAccessAdminMixin, admin.ModelAdmin):
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         related_model = db_field.remote_field.model
         if db_field.name == "company":
-            kwargs["queryset"] = services.allowed_companies(request.user)
+            kwargs["queryset"] = services.companies_for_app(request.user, self.model._meta.app_label)
         elif issubclass(related_model, BaseModel):
             kwargs["queryset"] = related_model.objects.for_user(request.user)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)

@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from core.access.models import BaseModel
+from core.access.services import allowed_companies
 
 from .fields import (
     CIN_VALIDATOR,
@@ -67,6 +68,11 @@ class Branch(CompanyCodedModel):
         verbose_name_plural = "branches"
         constraints = unique_code("unique_branch_code_per_company")
 
+    def clean(self):
+        """A branch GSTN must carry the company's PAN. Example: Acme PAN ABCDE1234F -> 27ABCDE1234F1Z5."""
+        if self.company_id:
+            check_gstn_matches_pan(self.company.pan, self.gstn)
+
 
 class Department(CompanyCodedModel):
     class Meta(CompanyCodedModel.Meta):
@@ -124,12 +130,28 @@ class Employee(BaseModel):
     def __str__(self):
         return f"{self.first_name} {self.last_name}".strip() + f" ({self.employee_code})"
 
+    def reports_to_in_loop(self):
+        """True if the chosen manager is somewhere below this employee. Example: Asha -> Bina -> Asha."""
+        if not self.pk:
+            return False
+        manager_id, seen = self.reports_to_id, set()
+        while manager_id and manager_id not in seen:
+            if manager_id == self.pk:
+                return True
+            seen.add(manager_id)
+            manager_id = Employee.objects.filter(pk=manager_id).values_list("reports_to_id", flat=True).first()
+        return False
+
     def clean(self):
         errors = other_company_errors(
             self, branch=self.branch, department=self.department, reports_to=self.reports_to
         )
         if self.pk and self.reports_to_id == self.pk:
             errors["reports_to"] = "An employee cannot report to themselves."
+        elif self.reports_to_in_loop():
+            errors["reports_to"] = f"{self.reports_to} already reports (directly or not) to this employee."
+        if self.user_id and self.company_id and not allowed_companies(self.user).filter(pk=self.company_id).exists():
+            errors["user"] = f"This login has no role in {self.company}. Give it a role there first."
         if errors:
             raise ValidationError(errors)
 

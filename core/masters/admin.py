@@ -13,7 +13,10 @@ class CompanyAdmin(AppAccessAdminMixin, admin.ModelAdmin):
     search_fields = ("name", "code", "pan", "gstn")
 
     def get_queryset(self, request):
-        return services.allowed_companies(request.user)
+        return services.companies_for_app(request.user, "masters")
+
+    def has_change_permission(self, request, obj=None):
+        return self._can_open_app(request) and services.can_change_company(request.user)
 
     def has_add_permission(self, request):
         return request.user.is_superuser  # new companies are set up by the group admin only

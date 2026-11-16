@@ -18,9 +18,24 @@ def _is_usable(user):
     return user is not None and user.is_authenticated and user.is_active
 
 
+ROLE_LINKS_CACHE = "_access_role_links"
+
+
 def _role_links(user):
-    """(company id, allowed apps, own records only) for each of the user's company roles."""
-    return user.company_roles.values_list("company_id", "role__allowed_apps", "role__own_records_only")
+    """(company id, allowed apps, own records only, needs 2FA) for each of the user's company roles.
+
+    Read once per request: the result is kept on the user object (request.user is new each request),
+    so the 2FA check, the sidebar and the access checks share one query.
+    """
+    links = getattr(user, ROLE_LINKS_CACHE, None)
+    if links is None:
+        links = list(
+            user.company_roles.values_list(
+                "company_id", "role__allowed_apps", "role__own_records_only", "role__requires_2fa"
+            )
+        )
+        setattr(user, ROLE_LINKS_CACHE, links)
+    return links
 
 
 def allowed_companies(user):
@@ -31,6 +46,20 @@ def allowed_companies(user):
     if user.is_superuser:
         return Company.objects.all()
     return Company.objects.filter(user_roles__user=user).distinct()
+
+
+def companies_for_app(user, app_code):
+    """Companies where one of the user's roles opens this app. Use for "which company?" choices.
+
+    Example: Ravi has Masters in Acme and only Travel in Globex -> for "masters" only Acme.
+    """
+    Company = apps.get_model("masters", "Company")
+    if not _is_usable(user):
+        return Company.objects.none()
+    if user.is_superuser:
+        return Company.objects.all()
+    all_rows, own_rows = app_access_by_company(user, app_code)
+    return Company.objects.filter(pk__in=all_rows | own_rows)
 
 
 def allowed_users(user):
@@ -45,11 +74,7 @@ def allowed_users(user):
 
 def user_can_open_app(user, app_code):
     """True if one of the user's company roles lists this app (or the user is a superuser)."""
-    if not _is_usable(user):
-        return False
-    if user.is_superuser:
-        return True
-    return any(app_code in (app_codes or []) for _, app_codes, _ in _role_links(user))
+    return app_code in apps_user_can_open(user, [app_code])
 
 
 def apps_user_can_open(user, app_codes):
@@ -58,14 +83,14 @@ def apps_user_can_open(user, app_codes):
         return []
     if user.is_superuser:
         return list(app_codes)
-    granted = {code for _, codes, _ in _role_links(user) for code in (codes or [])}
+    granted = {code for _, codes, _, _ in _role_links(user) for code in (codes or [])}
     return [code for code in app_codes if code in granted]
 
 
 def app_access_by_company(user, app_code):
     """Two sets of company ids for one app: where the user sees all rows, and where only own rows."""
     own_only_flags = {}
-    for company_id, app_codes, own_only in _role_links(user):
+    for company_id, app_codes, own_only, _ in _role_links(user):
         if app_code in (app_codes or []):
             own_only_flags.setdefault(company_id, []).append(own_only)
     all_rows = {company_id for company_id, flags in own_only_flags.items() if not all(flags)}
@@ -81,6 +106,23 @@ def visible_rows(queryset, user):
         return queryset
     all_rows, own_rows = app_access_by_company(user, queryset.model.access_app_code())
     return queryset.filter(Q(company_id__in=all_rows) | Q(company_id__in=own_rows, created_by=user))
+
+
+def roles_require_2fa(user):
+    """Superusers always need 2FA; others only if one of their roles says so."""
+    if not _is_usable(user):
+        return False
+    return user.is_superuser or any(needs_2fa for *_, needs_2fa in _role_links(user))
+
+
+def can_use_admin(user):
+    """The admin site is for active staff only, never for external users (even if 'staff' is ticked)."""
+    return _is_usable(user) and user.is_staff and not user.is_external
+
+
+def can_change_company(user):
+    """Company details (PAN, GSTN, CIN) are legal data: only the group admin (superuser) changes them."""
+    return _is_usable(user) and user.is_superuser
 
 
 def can_view_bank_details(user):

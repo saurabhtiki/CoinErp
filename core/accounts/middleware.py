@@ -2,10 +2,13 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django_htmx.http import HttpResponseClientRedirect
 
-from .services import user_has_2fa_device, user_needs_2fa
+from core.access.services import roles_require_2fa
 
-# Pages a logged-in user can open before passing 2FA.
-OPEN_URL_NAMES = {"login", "logout", "otp_setup", "otp_verify", "healthz"}
+from .services import user_has_2fa_device
+
+# Pages a logged-in user can open before passing 2FA. Full names (with namespace), so a page
+# called "login" in some other app is not let through by mistake.
+OPEN_VIEW_NAMES = {"login", "logout", "accounts:otp_setup", "accounts:otp_verify", "core:healthz"}
 
 
 class TwoFactorRequiredMiddleware:
@@ -21,7 +24,7 @@ class TwoFactorRequiredMiddleware:
         user = request.user
         if not user.is_authenticated or user.is_verified():
             return None
-        if request.resolver_match.url_name in OPEN_URL_NAMES or not user_needs_2fa(user):
+        if request.resolver_match.view_name in OPEN_VIEW_NAMES or not roles_require_2fa(user):
             return None
         target = reverse("accounts:otp_verify" if user_has_2fa_device(user) else "accounts:otp_setup")
         if request.htmx:

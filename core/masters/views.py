@@ -23,7 +23,7 @@ class MasterList:
 
     def rows_for(self, user):
         if self.model is Company:
-            rows = services.allowed_companies(user)
+            rows = services.companies_for_app(user, "masters")
         else:
             rows = self.model.objects.for_user(user).annotate(company_code=F("company__code"))
         return rows.annotate(**self.annotations)
@@ -108,5 +108,7 @@ class MasterListView(AppAccessRequiredMixin, View):
             "master_lists": MASTER_LISTS,
             "change_url_name": f"admin:masters_{config.model._meta.model_name}_change",
             "add_url_name": f"admin:masters_{config.model._meta.model_name}_add",
+            # Add/Edit open the admin screens, which only staff may use; others get a view-only list.
+            "can_edit": services.can_use_admin(request.user),
         }
         return table_response(request, table, "masters/list.html", "masters/partials/table.html", context)
