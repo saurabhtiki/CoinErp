@@ -1,0 +1,12 @@
+{% load form_tags %}{% if form.non_field_errors %}
+<div role="alert" class="alert alert-error alert-soft">{% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}</div>
+{% endif %}
+{% for field in form.hidden_fields %}{{ field }}{% endfor %}
+{% for field in form.visible_fields %}
+<fieldset class="fieldset">
+  <legend class="fieldset-legend">{{ field.label }}</legend>
+  {% if field.errors %}{{ field|add_class:"input input-error w-full" }}{% else %}{{ field|add_class:"input w-full" }}{% endif %}
+  {% for error in field.errors %}<p class="label text-error">{{ error }}</p>{% endfor %}
+  {% if field.help_text %}<div class="label whitespace-normal">{{ field.help_text|safe }}</div>{% endif %}
+</fieldset>
+{% endfor %}

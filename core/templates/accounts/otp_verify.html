@@ -1,0 +1,12 @@
+{% extends "base_auth.html" %}
+{% block title %}Enter code{% endblock %}
+{% block heading %}Enter your code{% endblock %}
+{% block content %}
+<form method="post" class="flex flex-col gap-2">
+  {% csrf_token %}
+  {% include "core/partials/form.html" %}
+  <button type="submit" class="btn btn-primary mt-2">Continue</button>
+</form>
+<p class="text-xs text-base-content/60">Lost your phone? Ask your admin to reset your two-step login.</p>
+<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="link link-hover text-sm">Sign out</button></form>
+{% endblock %}

@@ -1,4 +1,5 @@
 """Settings shared by every environment. Secrets and per-server values come from .env."""
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -24,8 +25,13 @@ INSTALLED_APPS = [
     # third party
     "django_htmx",
     "django_tailwind_cli",
+    "axes",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
     # core
     "core",
+    "core.masters",
+    "core.accounts",
 ]
 
 MIDDLEWARE = [
@@ -35,9 +41,13 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    "core.accounts.middleware.TwoFactorRequiredMiddleware",
+    # Must be last: blocks locked-out accounts.
+    "axes.middleware.AxesMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -68,6 +78,26 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+AUTH_USER_MODEL = "accounts.User"
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",  # must be first: counts wrong passwords
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+# Lockout: 5 wrong passwords lock that account for 30 minutes. Admin can unlock in "Axes".
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=30)
+AXES_LOCKOUT_PARAMETERS = ["username"]
+AXES_USERNAME_CALLABLE = "core.accounts.services.lockout_username"
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = "registration/locked.html"
+# We lock the account, not the IP: everyone in one office shares an IP, so an IP lock
+# would lock out the whole office. Agreed in docs/plan.md (decision 8).
+SILENCED_SYSTEM_CHECKS = ["axes.W006"]
+
+# 2FA: name shown in the authenticator app
+OTP_TOTP_ISSUER = "Group ERP"
 
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"

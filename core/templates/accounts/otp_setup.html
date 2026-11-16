@@ -1,0 +1,18 @@
+{% extends "base_auth.html" %}
+{% block title %}Set up 2FA{% endblock %}
+{% block heading %}Set up two-step login{% endblock %}
+{% block content %}
+<ol class="list-decimal list-inside text-sm flex flex-col gap-1">
+  <li>Install an authenticator app (Google Authenticator, Microsoft Authenticator).</li>
+  <li>Scan this code with the app.</li>
+  <li>Type the 6-digit code the app shows.</li>
+</ol>
+<div class="mx-auto w-48 bg-white p-2 rounded-box">{{ qr_svg }}</div>
+<p class="text-xs text-base-content/60 text-center" title="Type this key into the app if you cannot scan">Cannot scan? Key: <code class="break-all">{{ secret }}</code></p>
+<form method="post" class="flex flex-col gap-2">
+  {% csrf_token %}
+  {% include "core/partials/form.html" %}
+  <button type="submit" class="btn btn-primary mt-2">Turn on</button>
+</form>
+<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="link link-hover text-sm">Sign out</button></form>
+{% endblock %}

@@ -1,4 +1,4 @@
-# Plan: Phase 1 — Foundation (confirmed; Step 1 done)
+# Plan: Phase 1 — Foundation (confirmed; Steps 1–2 done)
 
 Goal: a working, secure shell of the ERP. Users can log in, see only their companies,
 and see a sidebar + home dashboard. No business apps yet.
@@ -26,6 +26,8 @@ We build it in 5 small steps. Each step = code + tests + Git commit, and I stop 
 - django-otp: TOTP (Google Authenticator). Forced only when a user's role says `requires_2fa`.
 - Invite-only: admin creates user -> user gets an email link to set their own password.
   No public sign-up page.
+- Built: `core/accounts` (User, Role, 2FA) and a starter `Company` in `core/masters`
+  (name, code, is_active). Step 4 adds address and tax IDs to it.
 
 ## Step 3. Access layer (moved before masters, see note)
 

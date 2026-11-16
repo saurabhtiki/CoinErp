@@ -1,0 +1,9 @@
+{% extends "base_auth.html" %}
+{% block title %}Account locked{% endblock %}
+{% block heading %}Account locked{% endblock %}
+{% block content %}
+<div role="alert" class="alert alert-warning alert-soft">
+  <span>Too many wrong passwords. This account is locked for 30 minutes. Ask your admin if you need it unlocked sooner.</span>
+</div>
+<a href="{% url 'password_reset' %}" class="link link-hover text-sm">Forgot password?</a>
+{% endblock %}

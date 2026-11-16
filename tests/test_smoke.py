@@ -13,7 +13,7 @@ def test_home_redirects_anonymous_user_to_login(client):
 
 @pytest.mark.django_db
 def test_home_opens_for_logged_in_user(client):
-    user = get_user_model().objects.create_user(username="ravi", password="a-long-password-123")
+    user = get_user_model().objects.create_user(email="ravi@example.com", password="a-long-password-123")
     client.force_login(user)
 
     response = client.get(reverse("core:home"))
