@@ -1,9 +1,10 @@
 {% load static tailwind_cli django_htmx nav_tags %}<!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="erp-light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Home{% endblock %} · Group ERP</title>
+  <script src="{% static 'js/theme.js' %}"></script>
   {% tailwind_css %}
   <link href="{% static 'django_datatable/datatable.css' %}" rel="stylesheet">
   {% htmx_script %}
@@ -19,6 +20,11 @@
     <header class="navbar bg-base-100 shadow-sm px-4 gap-2 sticky top-0 z-10 print:hidden">
       <label for="app-drawer" class="btn btn-ghost btn-square lg:hidden" title="Open the menu">{% icon "menu" %}</label>
       <div class="flex-1"></div>
+      <label class="swap swap-rotate btn btn-ghost btn-circle" title="Switch between light and dark mode">
+        <input type="checkbox" id="theme-toggle" aria-label="Toggle dark mode">
+        <svg class="swap-off h-5 w-5 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path d="M5.64 17l-.71.71a1 1 0 001.41 1.41l.71-.71A1 1 0 005.64 17zM5 12a1 1 0 00-1-1H3a1 1 0 000 2h1a1 1 0 001-1zm7-7a1 1 0 001-1V3a1 1 0 00-2 0v1a1 1 0 001 1zM5.64 7.05a1 1 0 00.7.29 1 1 0 00.71-.29 1 1 0 000-1.41l-.71-.71a1 1 0 00-1.41 1.41zm12 .29a1 1 0 00.7-.29l.71-.71a1 1 0 10-1.41-1.41l-.71.71a1 1 0 000 1.41 1 1 0 00.71.29zM21 11h-1a1 1 0 000 2h1a1 1 0 000-2zm-9 8a1 1 0 00-1 1v1a1 1 0 002 0v-1a1 1 0 00-1-1zm6.36-2a1 1 0 000 1.41l.71.71a1 1 0 001.41-1.41l-.71-.71a1 1 0 00-1.41 0zM12 6.5A5.5 5.5 0 1017.5 12 5.51 5.51 0 0012 6.5zm0 9A3.5 3.5 0 1115.5 12 3.5 3.5 0 0112 15.5z"/></svg>
+        <svg class="swap-on h-5 w-5 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.64 13a1 1 0 00-1.05-.14 8.05 8.05 0 01-3.37.73 8.15 8.15 0 01-8.14-8.1 8.59 8.59 0 01.25-2A1 1 0 008 2.36a10.14 10.14 0 1014 11.69 1 1 0 00-.36-1.05zm-9.5 6.69A8.14 8.14 0 017.08 5.22v.27a10.15 10.15 0 0010.14 10.14 9.79 9.79 0 002.1-.22 8.11 8.11 0 01-7.18 4.32z"/></svg>
+      </label>
       <div class="dropdown dropdown-end">
         <div tabindex="0" role="button" class="btn btn-ghost btn-circle" title="Notifications"
              hx-get="{% url 'notifications:list' %}" hx-target="#bell-list" hx-trigger="click">

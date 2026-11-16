@@ -1,0 +1,12 @@
+<tr>
+  <td data-dt-col="date" class="dt-sticky whitespace-nowrap">{{ row.date|date:"D d-m-Y" }}</td>
+  <td data-dt-col="name">{{ row.name }}</td>
+  <td data-dt-col="company_code">{{ row.company_code }}</td>
+  <td class="text-right whitespace-nowrap">
+    {% if row.company_id in admin_company_ids %}
+      <form method="post" action="{% url 'tasks:holiday_remove' row.pk %}" class="inline" onsubmit="return confirm('Remove the holiday {{ row.name|escapejs }}?')">{% csrf_token %}
+        <button class="btn btn-ghost btn-xs text-error" title="Remove this holiday">Remove</button>
+      </form>
+    {% endif %}
+  </td>
+</tr>

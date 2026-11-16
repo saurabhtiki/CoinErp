@@ -1,0 +1,17 @@
+{% load task_tags %}<tr>
+  <td data-dt-col="title" class="dt-sticky">
+    <a href="{% url 'tasks:rule' row.pk %}" hx-get="{% url 'tasks:rule' row.pk %}" hx-target="#task-panel" hx-swap="innerHTML" hx-push-url="false"
+       class="link link-hover font-medium" title="Open this repeating task">{{ row.title }}</a>
+  </td>
+  <td data-dt-col="owner_name">{{ row.owner_name }}</td>
+  <td data-dt-col="frequency">{{ row|repeats }}<div class="text-xs text-base-content/70" title="Due date of the next task this rule will make">Next due: {% next_due row %}</div></td>
+  <td data-dt-col="is_paused"><span class="badge badge-sm {% if row.is_paused %}badge-warning{% else %}badge-success{% endif %}">{% if row.is_paused %}Paused{% else %}Active{% endif %}</span></td>
+  <td class="text-right whitespace-nowrap">
+    {% if row|can_change:request.user %}
+    <button class="btn btn-ghost btn-xs" hx-post="{% url 'tasks:rule_pause' row.pk %}" hx-vals='{"from": "list"}' hx-swap="none"
+            hx-on::response-error="alert(event.detail.xhr.responseText || 'This could not be changed. Reload the page and try again.')"
+            title="{% if row.is_paused %}Start making tasks again{% else %}Stop making new tasks. Tasks already made stay.{% endif %}">{% if row.is_paused %}Resume{% else %}Pause{% endif %}</button>
+    {% endif %}
+    <a href="{% url 'audit:record' 'tasks' 'recurringtask' row.pk %}" class="btn btn-ghost btn-xs" title="Who changed this repeating task, and when">History</a>
+  </td>
+</tr>

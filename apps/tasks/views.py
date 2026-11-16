@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlsplit
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import F
@@ -16,6 +17,7 @@ from core.files import services as files
 from . import services
 from .forms import ActionForm, TaskForm, task_initial
 from .models import Task, TaskAction, TaskLink
+from .schedule import describe
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,15 @@ class TasksView(AppAccessRequiredMixin, View):
         """The task, or 404 if this user may not see it."""
         return get_object_or_404(services.visible_tasks(self.request.user), pk=pk)
 
+    def company(self, request):
+        """The company picked in a "new" form (the user's first one if none is picked), and all their companies."""
+        companies = companies_for_app(request.user, "tasks")
+        picked = request.POST.get("company") or request.GET.get("company")
+        company = companies.filter(pk=picked).first() if picked and picked.isdigit() else companies.first()
+        if company is None:
+            raise Http404("You have no company to add a task in.")
+        return company, companies
+
 
 class TaskListView(TasksView):
     """My tasks / Assigned by me / All tasks. Example: /tasks/list/mine/."""
@@ -77,7 +88,7 @@ class TaskListView(TasksView):
             search_fields=("title", "description"), search_placeholder="Search tasks", shortcuts=SHORTCUTS,
             noun="tasks",
         )
-        context = {"table": table, "title": title, "lists": LISTS, "view": view}
+        context = {"table": table, "title": title, "lists": LISTS, "view": view, "tab": view}
         return table_response(request, table, "tasks/list.html", "tasks/partials/table.html", context)
 
 
@@ -112,6 +123,9 @@ def panel(request, task, form=None, tab="actions", error="", action_form=None, s
         "tab": tab if tab in TABS else "actions",
         "panel_error": error,
         "today": timezone.localdate(),
+        "repeats_text": describe(task.recurring_task) if task.recurring_task_id else "",
+        "rule_visible": bool(task.recurring_task_id)
+        and services.visible_rules(user).filter(pk=task.recurring_task_id).exists(),
         "close_url": close_url(request),
         "as_page": shown_as_page(request),
     }
@@ -119,17 +133,23 @@ def panel(request, task, form=None, tab="actions", error="", action_form=None, s
     return render(request, template, context, status=status)
 
 
+def list_behind(request):
+    """Address of the list the panel was opened over, or "" when the panel is a page of its own."""
+    current = request.headers.get("HX-Current-URL", "")
+    path = urlsplit(current).path
+    if request.htmx and (path.startswith("/tasks/list/") or path == reverse("tasks:rules")):
+        return current
+    return ""
+
+
 def shown_as_page(request):
     """The panel slides over a list; opened by its own address (e.g. from an email) it is a normal page."""
-    return not (request.htmx and "/tasks/list/" in request.headers.get("HX-Current-URL", ""))
+    return not list_behind(request)
 
 
-def close_url(request):
+def close_url(request, default=""):
     """Where Close goes: back to the list the panel was opened from (reloads it with fresh rows)."""
-    current = request.headers.get("HX-Current-URL", "")
-    if request.htmx and "/tasks/list/" in current:
-        return current
-    return reverse("tasks:list", args=["mine"])
+    return list_behind(request) or default or reverse("tasks:list", args=["mine"])
 
 
 def error_text(error):
@@ -160,14 +180,6 @@ class TaskDetailView(TasksView):
 
 
 class TaskNewView(TasksView):
-    def company(self, request):
-        companies = companies_for_app(request.user, "tasks")
-        picked = request.POST.get("company") or request.GET.get("company")
-        company = companies.filter(pk=picked).first() if picked and picked.isdigit() else companies.first()
-        if company is None:
-            raise Http404("You have no company to add a task in.")
-        return company, companies
-
     def render(self, request, form, company, companies):
         context = {
             "form": form, "company": company, "companies": companies if companies.count() > 1 else [],

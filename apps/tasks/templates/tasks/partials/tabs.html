@@ -1,0 +1,11 @@
+{# The tabs on top of every Tasks screen. Needs `lists` and `tab` (the open one). #}
+<div role="tablist" class="tabs tabs-box mb-4 overflow-x-auto flex-nowrap">
+  {% for slug, item in lists.items %}
+    <a role="tab" href="{% url 'tasks:list' slug %}" class="tab whitespace-nowrap{% if slug == tab %} tab-active{% endif %}" title="{{ item.2 }}">{{ item.0 }}</a>
+  {% endfor %}
+  <a role="tab" href="{% url 'tasks:rules' %}" class="tab whitespace-nowrap{% if tab == 'rules' %} tab-active{% endif %}" title="Rules that make the same task again and again, e.g. a tax return every month">Repeating</a>
+  <a role="tab" href="{% url 'tasks:holidays' %}" class="tab whitespace-nowrap{% if tab == 'holidays' %} tab-active{% endif %}" title="Days off: repeating tasks avoid these dates">Holidays</a>
+</div>
+{% for message in messages %}
+  <div role="alert" class="alert alert-soft {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %} text-sm mb-3">{{ message }}</div>
+{% endfor %}

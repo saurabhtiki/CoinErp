@@ -194,12 +194,20 @@ def can_see_record(user, record):
 
 def sees_all_rows(user, record):
     """True if the user sees every row of this record's app in its company (an admin there)."""
+    return is_app_admin(user, type(record).access_app_code(), record.company_id)
+
+
+def is_app_admin(user, app_code, company_id):
+    """True if the user sees every row of this app in this company. Use when there is no record yet.
+
+    Example: is_app_admin(boss, "tasks", acme.pk) -> may Boss keep Acme's holiday list?
+    """
     if not _is_usable(user):
         return False
     if user.is_superuser:
         return True
-    all_rows, _ = app_access_by_company(user, type(record).access_app_code())
-    return record.company_id in all_rows
+    all_rows, _ = app_access_by_company(user, app_code)
+    return company_id in all_rows
 
 
 def can_manage_record(user, record):

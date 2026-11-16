@@ -11,6 +11,9 @@
   </div>
   <p class="text-sm text-base-content/70 mb-2">{{ task.company }}. Created by {{ task.created_by.get_full_name|default:task.created_by|default:"someone" }} on {{ task.created_at|date:"d-m-Y" }}.</p>
 
+  {% if repeats_text %}
+    <p class="text-sm mb-2" title="This task was made by a repeating rule. Change the rule to change future tasks.">Repeats: {{ repeats_text }} (from rule {% if rule_visible %}<a href="{% url 'tasks:rule' task.recurring_task_id %}" class="link link-primary" title="Open the repeating rule">{{ task.recurring_task.title }}</a>{% else %}{{ task.recurring_task.title }}{% endif %})</p>
+  {% endif %}
   {% if panel_error %}<div role="alert" class="alert alert-error alert-soft text-sm mb-2">{{ panel_error }}</div>{% endif %}
   {% if not can_manage %}
     <div role="alert" class="alert alert-info alert-soft text-sm mb-2">You can view this task, comment and add files. Only the owner, the creator or their manager can change it.</div>

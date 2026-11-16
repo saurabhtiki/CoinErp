@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <h1 class="text-2xl font-bold flex-1">{{ title }}</h1>
+</div>
+{% include "tasks/partials/tabs.html" %}
+<p class="text-sm text-base-content/70 mb-3">Repeating tasks avoid these days, Sundays and the off Saturdays. A change here affects only tasks made after it.</p>
+{% if form %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+  <form method="post" action="{% url 'tasks:holidays' %}" class="card card-border bg-base-100 p-4 gap-2">{% csrf_token %}
+    <h2 class="font-medium">Add a holiday</h2>
+    {% for error in form.non_field_errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      {% for field in form %}
+        <div{% if field.name == 'company' and saturdays|length == 1 %} class="hidden"{% endif %} title="{{ field.label }}">{{ field }}{% for error in field.errors %}<p class="label text-error whitespace-normal">{{ error }}</p>{% endfor %}</div>
+      {% endfor %}
+    </div>
+    <button class="btn btn-primary btn-sm self-start" title="Add this day off for the company">Add holiday</button>
+  </form>
+  <div class="card card-border bg-base-100 p-4 gap-2">
+    <h2 class="font-medium" title="Which Saturdays of the month are off. Sunday is always off.">Saturdays off</h2>
+    {% for company, days in saturdays %}
+      <form method="post" action="{% url 'tasks:saturdays' %}" class="flex flex-wrap items-center gap-3 text-sm">{% csrf_token %}
+        <input type="hidden" name="company" value="{{ company.pk }}">
+        {% if saturdays|length > 1 %}<span class="font-medium">{{ company }}</span>{% endif %}
+        {% for number, name, ticked in days %}
+          <label class="flex items-center gap-1 cursor-pointer" title="Tick if the {{ name }} Saturday of each month is off"><input type="checkbox" class="checkbox checkbox-sm" name="saturdays" value="{{ number }}"{% if ticked %} checked{% endif %}> {{ name }}</label>
+        {% endfor %}
+        <button class="btn btn-sm" title="Save which Saturdays are off for {{ company }}">Save</button>
+      </form>
+    {% endfor %}
+    <p class="text-xs text-base-content/70">Sunday is always off.</p>
+  </div>
+</div>
+{% endif %}
+{% include "tasks/partials/holidays_table.html" %}
+{% endblock %}

@@ -1,0 +1,118 @@
+{% if not as_page %}<a href="{{ close_url }}" class="fixed inset-0 z-40 bg-black/40" aria-label="Close" title="Close"></a>{% endif %}
+<aside class="{% if as_page %}card bg-base-100 shadow-sm max-w-3xl p-5{% else %}fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto bg-base-100 shadow-xl p-5{% endif %}"
+       hx-target="#task-panel" hx-swap="innerHTML" x-data="{ frequency: '{{ frequency }}' }">
+  <div class="flex items-center gap-2 mb-1">
+    <h2 class="text-lg font-bold flex-1">{% if rule %}Repeating task{% else %}New repeating task{% endif %}</h2>
+    {% if rule %}
+      <span class="badge {% if rule.is_paused %}badge-warning{% else %}badge-success{% endif %} badge-soft">{% if rule.is_paused %}Paused{% else %}Active{% endif %}</span>
+      <a href="{% url 'audit:record' 'tasks' 'recurringtask' rule.pk %}" class="btn btn-ghost btn-sm" title="Who changed this repeating task, and when">History</a>
+    {% endif %}
+    <a href="{{ close_url }}" class="btn btn-ghost btn-sm" title="Go back to the list">Close</a>
+  </div>
+  {% if rule %}
+    <p class="text-sm text-base-content/70 mb-2">{{ rule.company }}. {{ repeats_text }}. Created by {{ rule.created_by.get_full_name|default:rule.created_by|default:"someone" }} on {{ rule.created_at|date:"d-m-Y" }}.</p>
+  {% else %}
+    <p class="text-sm text-base-content/70 mb-2">A repeating task has no due date of its own. You only say how often and on which day; the tasks are then made for you.</p>
+  {% endif %}
+
+  {% if panel_error %}<div role="alert" class="alert alert-error alert-soft text-sm mb-2">{{ panel_error }}</div>{% endif %}
+  {% if not can_manage %}
+    <div role="alert" class="alert alert-info alert-soft text-sm mb-2">You can view this repeating task. Only the owner, the creator or their manager can change it.</div>
+  {% endif %}
+
+  <form hx-post="{% if rule %}{% url 'tasks:rule' rule.pk %}{% else %}{% url 'tasks:rule_new' %}{% endif %}">
+    {% if companies %}
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Company</legend>
+        <select name="company" class="select select-sm w-full" hx-get="{% url 'tasks:rule_new' %}" hx-include="closest form"
+                title="The repeating task and its people belong to this company">
+          {% for item in companies %}<option value="{{ item.pk }}"{% if item.pk == company.pk %} selected{% endif %}>{{ item }}</option>{% endfor %}
+        </select>
+      </fieldset>
+    {% else %}
+      <input type="hidden" name="company" value="{{ company.pk }}">
+    {% endif %}
+    {% if rule %}<input type="hidden" name="saved" value="1">{% endif %}
+    {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error alert-soft text-sm mb-2">{% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}</div>
+    {% endif %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+      {% for field in form %}
+      <fieldset class="fieldset{% if field.name in 'title collaborators description' %} sm:col-span-2{% endif %}"
+        {% if field.name == 'weekday' %}x-show="frequency === 'weekly'" x-cloak
+        {% elif field.name == 'due_day' %}x-show="frequency === 'monthly' || frequency === 'yearly'" x-cloak
+        {% elif field.name == 'due_month' %}x-show="frequency === 'yearly'" x-cloak
+        {% elif field.name == 'due_in_next_period' or field.name == 'off_day_rule' %}x-show="frequency !== 'daily'" x-cloak{% endif %}>
+        <legend class="fieldset-legend"{% if field.help_text %} title="{{ field.help_text }}"{% endif %}>{{ field.label }}</legend>
+        {% if field.name == "collaborators" %}
+          <div class="text-sm [&>div]:flex [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-1 [&_label]:flex [&_label]:items-center [&_label]:gap-1 [&_label]:cursor-pointer">{{ field }}</div>
+        {% elif field.name == "due_in_next_period" %}
+          <label class="flex items-center gap-2 cursor-pointer text-sm">{{ field }} Yes</label>
+        {% else %}
+          {{ field }}
+        {% endif %}
+        {% for error in field.errors %}<p class="label text-error whitespace-normal">{{ error }}</p>{% endfor %}
+        {% if field.help_text %}<p class="label whitespace-normal">{{ field.help_text }}</p>{% endif %}
+      </fieldset>
+      {% if field.name == "end_date" %}
+        <div class="sm:col-span-2 alert alert-info alert-soft text-sm my-2" title="The dates of the next tasks this rule will make. It changes as you change the fields."
+             {% if can_manage %}hx-post="{% url 'tasks:rule_preview' %}" hx-trigger="load, change from:closest form delay:150ms" hx-include="closest form" hx-target="this" hx-swap="innerHTML"{% endif %}>{{ preview|default:"Working out the dates…" }}</div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    <div class="flex flex-wrap gap-2 mt-2">
+      {% if can_manage %}
+        <button class="btn btn-primary btn-sm" title="{% if rule %}Save the changes. Tasks already made are not changed.{% else %}Save the repeating task. Its tasks will be made by the daily job.{% endif %}">{% if rule %}Save changes{% else %}Create repeating task{% endif %}</button>
+        {% if rule %}
+          <button type="button" class="btn btn-sm" hx-post="{% url 'tasks:rule_pause' rule.pk %}"
+                  title="{% if rule.is_paused %}Start making tasks again{% else %}Stop making new tasks. Tasks already made stay as they are.{% endif %}">{% if rule.is_paused %}Resume{% else %}Pause{% endif %}</button>
+        {% endif %}
+      {% endif %}
+    </div>
+  </form>
+
+  {% if rule %}
+    <h3 class="font-medium mt-5 mb-1" title="These small steps are copied to every task of this rule">Actions copied to every task ({{ actions|length }})</h3>
+    {% if actions %}
+      <ul class="list">
+        {% for action in actions %}
+          <li class="list-row items-center py-2">
+            <div class="min-w-0">
+              <div>{{ action.title }}</div>
+              <div class="text-xs text-base-content/70">{{ action.owner.get_full_name|default:action.owner }}, {% if action.days_before_due %}{{ action.days_before_due }} day{{ action.days_before_due|pluralize }} before the due date{% else %}on the due date{% endif %}</div>
+            </div>
+            {% if can_manage %}
+              <button class="btn btn-ghost btn-xs text-error" hx-post="{% url 'tasks:rule_action_remove' action.pk %}"
+                      hx-confirm="Remove the action '{{ action.title }}'? Tasks already made keep it." title="Remove this action from future tasks">Remove</button>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-base-content/70">No actions yet.</p>
+    {% endif %}
+    {% if can_manage %}
+      <form hx-post="{% url 'tasks:rule_action_add' rule.pk %}" class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+        <div class="sm:col-span-3">{{ action_form.title }}{% for error in action_form.title.errors %}<p class="label text-error">{{ error }}</p>{% endfor %}</div>
+        <div title="Who does this action">{{ action_form.owner }}</div>
+        <label class="flex items-center gap-2 text-sm" title="Days before the task's due date. 0 = on the due date.">{{ action_form.days_before_due }}<span class="whitespace-nowrap">days before</span></label>
+        <button class="btn btn-sm" title="Add this small step to every future task of this rule">Add action</button>
+        {% for error in action_form.days_before_due.errors %}<p class="label text-error sm:col-span-3">{{ error }}</p>{% endfor %}
+      </form>
+    {% endif %}
+
+    <h3 class="font-medium mt-5 mb-1" title="The latest tasks this rule has made">Tasks made by this rule</h3>
+    {% if tasks_made %}
+      <ul class="list">
+        {% for task in tasks_made %}
+          <li class="list-row items-center py-2">
+            <a href="{% url 'tasks:detail' task.pk %}" class="link link-hover min-w-0" title="Open this task">{{ task.code }} {{ task.title }}</a>
+            <span class="text-xs text-base-content/70 whitespace-nowrap">due {{ task.due_date|date:"d-m-Y" }}, {{ task.get_status_display }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-base-content/70">No tasks yet. The daily job makes them when their time comes.</p>
+    {% endif %}
+  {% endif %}
+</aside>

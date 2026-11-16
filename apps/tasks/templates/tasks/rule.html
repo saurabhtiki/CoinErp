@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}{% if rule %}{{ rule.title }}{% else %}New repeating task{% endif %}{% endblock %}
+{% block content %}
+<div id="task-panel">{% include "tasks/partials/rule.html" %}</div>
+{% endblock %}

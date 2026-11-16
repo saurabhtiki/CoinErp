@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <h1 class="text-2xl font-bold flex-1">{{ title }}</h1>
+  {% if is_admin %}
+    <form method="post" action="{% url 'tasks:rule_run' %}">{% csrf_token %}
+      <button class="btn btn-sm" title="Make the tasks that are due now, without waiting for the 6:00 am daily job. Safe to press twice: nothing is made twice.">Create due tasks now</button>
+    </form>
+  {% endif %}
+  <button class="btn btn-primary btn-sm" hx-get="{% url 'tasks:rule_new' %}" hx-target="#task-panel" hx-swap="innerHTML"
+          title="Add a task that repeats, e.g. every month">New repeating task</button>
+</div>
+{% include "tasks/partials/tabs.html" %}
+{% include "tasks/partials/rules_table.html" %}
+<div id="task-panel"></div>
+{% endblock %}
