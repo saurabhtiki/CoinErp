@@ -1,0 +1,27 @@
+# Secrets - never commit (public repo)
+.env
+.env.*
+!.env.example
+
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Databases and runtime data
+*.sqlite3
+*.sqlite3-journal
+private_media/
+staticfiles/
+backups/
+
+# Built CSS and downloaded Tailwind binary
+assets/css/tailwind.css
+.django_tailwind_cli/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

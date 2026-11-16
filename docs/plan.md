@@ -1,4 +1,4 @@
-# Plan: Phase 1 — Foundation (DRAFT, not confirmed)
+# Plan: Phase 1 — Foundation (confirmed; Step 1 done)
 
 Goal: a working, secure shell of the ERP. Users can log in, see only their companies,
 and see a sidebar + home dashboard. No business apps yet.
@@ -59,6 +59,28 @@ django, django-environ, psycopg (prod), gunicorn, django-axes, django-otp, qrcod
 django-htmx, django-datatable (from GitHub), pytest, pytest-django.
 (django-simple-history, django-q2, openpyxl, WeasyPrint come in Phase 2.)
 
-## Open questions
+## Decisions (agreed 2026-11-16)
 
-Listed in chat; answers will be written here before building.
+1. DB: SQLite for dev/test, PostgreSQL (Docker) for staging/prod.
+2. UI: DaisyUI + Tailwind + HTMX + Alpine.js.
+3. Tailwind built with `django-tailwind-cli` (no Node).
+4. This is one ERP project; apps stay self-contained. CLAUDE.md to be updated to say so.
+5. Access layer (step 3) built before Masters (step 4).
+6. Login with email address.
+7. `requires_2fa` flag on Role; superusers always need 2FA.
+8. Lockout: 5 wrong passwords -> locked 30 min; admin can unlock.
+9. Invite: admin creates user -> Django's built-in set-password email link (default expiry, nothing custom).
+10. Vendor/Customer belong to one company.
+11. Bank details: plain fields, visible only with a "view bank details" permission.
+12. Sandbox = separate staging deployment (own URL + DB), same Docker setup. Deployed later.
+13. Packages approved: django, django-environ, psycopg, gunicorn, django-axes, django-otp, qrcode,
+    django-htmx, django-tailwind-cli, django-datatable (GitHub), pytest, pytest-django.
+14. Git: repo `github.com/saurabhtiki/CoinERP` (public), branch `main`. Commit + push after each step.
+15. Never commit `.env`, DB files, or secrets (repo is public).
+16. Superuser sees all companies; everyone else only assigned companies.
+17. External user = `is_external=True`; no admin site; only role's apps + assigned companies.
+18. Locale: Asia/Kolkata, en-IN, dates `DD-MM-YYYY`, currency INR.
+19. Employee gets `employee_code` (unique per company), email, mobile.
+
+Note: "own records only" in Phase 1 = rows the user created. Each app can later add its own
+"assigned to" field through the access layer.

@@ -1,0 +1,23 @@
+[project]
+name = "coinerp"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2,<6",
+    "django-environ>=0.14.0",
+    "django-htmx>=1.29.0",
+    "django-tailwind-cli>=4.8.2",
+    "gunicorn>=27.0.1",
+    "psycopg[binary]>=3.3.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-django>=4.14.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+testpaths = ["tests", "core", "apps"]

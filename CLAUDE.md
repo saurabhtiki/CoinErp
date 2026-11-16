@@ -1,6 +1,8 @@
 \# Project
 
-Reusable apps for other Django projects.
+Group ERP platform (see `project.md`): one shared `core` + plug-in apps in `apps/`. Keep each app self-contained so it could be reused elsewhere.
+
+Current phase: Phase 1 Foundation, Step 1 (skeleton) done; next Step 2 (users and login). Plan: `docs/plan.md`.
 
 
 
