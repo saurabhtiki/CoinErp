@@ -1,13 +1,13 @@
 from django.contrib import admin
 
 from core.access import services
-from core.access.admin import AccessModelAdmin, AppAccessAdminMixin
+from core.access.admin import AccessModelAdmin, AppAccessAdminMixin, HistoryAdmin
 
 from .models import Branch, Company, CostCentre, Customer, Department, Employee, Vendor
 
 
 @admin.register(Company)
-class CompanyAdmin(AppAccessAdminMixin, admin.ModelAdmin):
+class CompanyAdmin(AppAccessAdminMixin, HistoryAdmin):
     list_display = ("name", "code", "pan", "gstn", "is_active")
     list_filter = ("is_active",)
     search_fields = ("name", "code", "pan", "gstn")

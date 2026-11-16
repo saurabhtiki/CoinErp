@@ -108,6 +108,7 @@ class MasterListView(AppAccessRequiredMixin, View):
             "master_lists": MASTER_LISTS,
             "change_url_name": f"admin:masters_{config.model._meta.model_name}_change",
             "add_url_name": f"admin:masters_{config.model._meta.model_name}_add",
+            "model_name": config.model._meta.model_name,
             # Add/Edit open the admin screens, which only staff may use; others get a view-only list.
             "can_edit": services.can_use_admin(request.user),
         }

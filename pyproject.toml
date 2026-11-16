@@ -9,6 +9,7 @@ dependencies = [
     "django-environ>=0.14.0",
     "django-htmx>=1.29.0",
     "django-otp>=1.7.5",
+    "django-simple-history>=3.13.0",
     "django-tailwind-cli>=4.8.2",
     "gunicorn>=27.0.1",
     "psycopg[binary]>=3.3.9",

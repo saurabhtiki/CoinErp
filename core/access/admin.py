@@ -4,11 +4,30 @@
 - Lists and dropdowns show only rows of the user's companies (and own rows, if their role says so).
 - The company choice lists only companies where the user's role opens the model's app.
 - "Created by" is filled in automatically.
+- The History button shows only records the user may see, without hidden fields (e.g. bank details).
 """
+from itertools import pairwise
+
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from . import services
 from .models import BaseModel
+
+
+class HistoryAdmin(SimpleHistoryAdmin):
+    """Admin with a History button. Old versions open only for rows in this admin's list."""
+
+    def has_view_history_or_change_history_permission(self, request, obj=None):
+        """Same rights as viewing the record itself, and only for rows this admin lists for the user."""
+        listed = obj is None or self.get_queryset(request).filter(pk=obj.pk).exists()
+        return self.has_view_permission(request, obj) and listed
+
+    def set_history_delta_changes(self, request, historical_records, foreign_keys_are_objs=True):
+        from core.audit.services import visible_changes
+
+        for newer, older in pairwise(historical_records):
+            newer.history_delta_changes = visible_changes(newer, older, request.user)
 
 
 class AppAccessAdminMixin:
@@ -33,7 +52,7 @@ class AppAccessAdminMixin:
         return self._can_open_app(request)
 
 
-class AccessModelAdmin(AppAccessAdminMixin, admin.ModelAdmin):
+class AccessModelAdmin(AppAccessAdminMixin, HistoryAdmin):
     """Use for every model built on BaseModel."""
 
     readonly_fields = ("created_by", "created_at", "updated_at")

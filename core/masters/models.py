@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 from core.access.models import BaseModel
 from core.access.services import allowed_companies
@@ -30,6 +31,8 @@ class Company(models.Model):
     gstn = gstn_field()
     cin = UpperCaseCharField("CIN", max_length=21, blank=True, validators=[CIN_VALIDATOR])
     is_active = models.BooleanField(default=True)
+
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["name"]

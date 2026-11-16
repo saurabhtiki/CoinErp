@@ -1,4 +1,7 @@
 {% load table_tags %}<tr>
   {% for column in table.columns %}<td data-dt-col="{{ column.name }}"{% if forloop.first %} class="dt-sticky"{% endif %}>{{ row|cell:column|default:"—" }}</td>{% endfor %}
-  {% if can_edit %}<td class="text-right"><a href="{% url change_url_name row.pk %}" class="btn btn-ghost btn-xs" title="Edit this record">Edit</a></td>{% endif %}
+  <td class="text-right whitespace-nowrap">
+    <a href="{% url 'audit:record' 'masters' model_name row.pk %}" class="btn btn-ghost btn-xs" title="Who changed this record, and when">History</a>
+    {% if can_edit %}<a href="{% url change_url_name row.pk %}" class="btn btn-ghost btn-xs" title="Edit this record">Edit</a>{% endif %}
+  </td>
 </tr>

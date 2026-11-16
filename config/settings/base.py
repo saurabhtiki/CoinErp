@@ -29,10 +29,12 @@ INSTALLED_APPS = [
     "axes",
     "django_otp",
     "django_otp.plugins.otp_totp",
+    "simple_history",
     # core
     "core",
     "core.masters",
     "core.accounts",
+    "core.audit",
 ]
 
 MIDDLEWARE = [
@@ -43,6 +45,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",  # records who made each change
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
@@ -112,6 +115,9 @@ USE_I18N = True
 USE_TZ = True
 DATE_INPUT_FORMATS = ["%d-%m-%Y", "%Y-%m-%d"]
 DEFAULT_CURRENCY = "INR"
+
+# History: view only. Restoring an old version is done by editing the record.
+SIMPLE_HISTORY_REVERT_DISABLED = True
 
 # Static and uploaded files. MEDIA is private: never served directly by nginx.
 STATIC_URL = "static/"

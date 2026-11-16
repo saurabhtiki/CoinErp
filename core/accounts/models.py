@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from simple_history import register
+from simple_history.models import HistoricalRecords
 
 
 class Role(models.Model):
@@ -17,6 +19,8 @@ class Role(models.Model):
     requires_2fa = models.BooleanField(
         default=False, help_text="Users must use an authenticator app code at login."
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["name"]
@@ -91,6 +95,8 @@ class CompanyRole(models.Model):
     company = models.ForeignKey("masters.Company", on_delete=models.CASCADE, related_name="user_roles")
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="company_roles")
 
+    history = HistoricalRecords()
+
     class Meta:
         ordering = ["company", "role"]
         verbose_name = "company role"
@@ -100,3 +106,7 @@ class CompanyRole(models.Model):
 
     def __str__(self):
         return f"{self.company}: {self.role}"
+
+
+# History of user changes. The password hash and last login are never stored.
+register(User, excluded_fields=["password", "last_login"])

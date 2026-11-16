@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}History of {{ record }}{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <div class="flex-1">
+    <p class="text-sm text-base-content/70 capitalize">{{ kind }}</p>
+    <h1 class="text-2xl font-bold">History of {{ record }}</h1>
+  </div>
+  <a href="javascript:history.back()" class="btn btn-ghost btn-sm" title="Go back to the previous page">Back</a>
+</div>
+
+{% if entries %}
+  <ul class="list bg-base-100 rounded-box shadow-sm" id="history">
+    {% for entry in entries %}
+      <li class="list-row">
+        <div>
+          <span class="badge badge-sm {% if entry.action == 'Created' %}badge-success{% elif entry.action == 'Deleted' %}badge-error{% else %}badge-info{% endif %} badge-soft">{{ entry.action }}</span>
+        </div>
+        <div>
+          <div><span class="font-semibold">{{ entry.who }}</span>
+            <span class="text-sm text-base-content/70" title="{{ entry.when|date:'d-m-Y H:i:s' }}">· {{ entry.when|date:"d-m-Y H:i" }}</span></div>
+          {% if entry.changes %}
+            <ul class="mt-1 text-sm space-y-0.5">
+              {% for change in entry.changes %}
+                <li><span class="text-base-content/70">{{ change.field }}:</span> {{ change.old }} <span aria-label="changed to">→</span> {{ change.new }}</li>
+              {% endfor %}
+            </ul>
+          {% elif entry.action == "Changed" %}
+            <p class="mt-1 text-sm text-base-content/70">No changes you can see.</p>
+          {% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <div role="alert" class="alert alert-info alert-soft">No history yet. Changes made from now on will show here.</div>
+{% endif %}
+{% endblock %}

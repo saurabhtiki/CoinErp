@@ -128,3 +128,24 @@ def can_change_company(user):
 def can_view_bank_details(user):
     """Vendor/customer bank fields are shown only with the "view bank details" permission."""
     return _is_usable(user) and user.has_perm("masters.view_bank_details")
+
+
+def visible_records(model, user):
+    """All rows of a model this user may see, for pages like History. Unknown kinds of model: none.
+
+    Example: visible_records(Vendor, ravi) -> Ravi's Acme vendors only.
+    """
+    Company = apps.get_model("masters", "Company")
+    if model is Company:
+        return companies_for_app(user, "masters")
+    rows = model._default_manager.all()
+    if hasattr(rows, "for_user"):  # every BaseModel
+        return rows.for_user(user)
+    return rows.none()
+
+
+def hidden_fields(model, user):
+    """Fields this user may not see on screens, exports or history. Example: bank details."""
+    if can_view_bank_details(user):
+        return set()
+    return set(getattr(model, "BANK_FIELDS", ()))

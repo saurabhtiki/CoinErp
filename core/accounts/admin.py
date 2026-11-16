@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
+from core.access.admin import HistoryAdmin
 from core.access.services import can_use_admin
 
 from . import services
@@ -18,7 +19,7 @@ admin.site.site_header = "Group ERP admin"
 
 
 @admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
+class RoleAdmin(HistoryAdmin):
     list_display = ["name", "allowed_apps", "own_records_only", "requires_2fa"]
     list_filter = ["own_records_only", "requires_2fa"]
     search_fields = ["name"]
@@ -33,7 +34,7 @@ class CompanyRoleInline(admin.TabularInline):
 
 
 @admin.register(User)
-class UserAdmin(DjangoUserAdmin):
+class UserAdmin(HistoryAdmin, DjangoUserAdmin):
     add_form = UserInviteForm
     form = UserEditForm
     add_fieldsets = [(None, {"fields": ["email", "first_name", "last_name", "is_external"]})]

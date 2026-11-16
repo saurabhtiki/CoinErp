@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 from . import services
 
@@ -26,6 +27,7 @@ class BaseModel(models.Model):
     is_active = models.BooleanField(default=True)
 
     objects = AccessQuerySet.as_manager()
+    history = HistoricalRecords(inherit=True)  # every change: who, when, old -> new (core/audit)
 
     class Meta:
         abstract = True

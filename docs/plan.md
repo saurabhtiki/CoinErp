@@ -16,6 +16,10 @@ Services are tested on a test-only demo app (`tests/`), so nothing fake shows in
   (checked through the access layer).
 - Example: "Ravi changed Vendor *Steel Co* phone 98… → 99… on 16-11-2026 14:05".
 - Tests: change is recorded with user; history hidden from users of other companies; no password in history.
+- Built: history on `BaseModel` (`inherit=True`), Company, Role, CompanyRole, User (no password/last login).
+  `core/audit` page `/history/<app>/<model>/<id>/` (rows via access layer `visible_records`, bank fields hidden via
+  `hidden_fields`); History link on every master list row. Admin History button (`HistoryAdmin`) shows only
+  listed rows and hides bank fields; view only (no revert). Records made before Step 6 start with no history.
 
 ## Step 7. Files
 
