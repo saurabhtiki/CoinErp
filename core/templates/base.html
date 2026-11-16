@@ -20,6 +20,18 @@
       <label for="app-drawer" class="btn btn-ghost btn-square lg:hidden" title="Open the menu">{% icon "menu" %}</label>
       <div class="flex-1"></div>
       <div class="dropdown dropdown-end">
+        <div tabindex="0" role="button" class="btn btn-ghost btn-circle" title="Notifications"
+             hx-get="{% url 'notifications:list' %}" hx-target="#bell-list" hx-trigger="click">
+          <div class="indicator">
+            {% icon "bell" %}
+            {% if unread_notifications %}<span id="bell-count" class="badge badge-xs badge-primary indicator-item">{{ unread_notifications }}</span>{% endif %}
+          </div>
+        </div>
+        <div tabindex="0" class="dropdown-content bg-base-100 rounded-box z-20 w-80 p-2 shadow-sm">
+          <div id="bell-list"><span class="loading loading-dots loading-sm m-2" aria-label="Loading"></span></div>
+        </div>
+      </div>
+      <div class="dropdown dropdown-end">
         <div tabindex="0" role="button" class="btn btn-ghost gap-2" title="Your account">
           {% icon "user" %}
           <span class="hidden sm:inline max-w-48 truncate">{{ request.user.get_full_name|default:request.user.email }}</span>

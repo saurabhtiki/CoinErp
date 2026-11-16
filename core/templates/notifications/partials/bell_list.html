@@ -1,0 +1,17 @@
+{% if items %}
+  <ul class="menu w-full p-0">
+    {% for item in items %}
+      <li>
+        <a href="{% url 'notifications:open' item.pk %}" class="flex-col items-start gap-0" title="Open this notification">
+          <span class="{% if not item.read_at %}font-semibold{% endif %}">{% if not item.read_at %}<span class="status status-primary mr-1" aria-label="unread"></span>{% endif %}{{ item.title }}</span>
+          <span class="text-xs text-base-content/70">{{ item.created_at|timesince }} ago</span>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-base-content/70 p-2">No notifications yet.</p>
+{% endif %}
+<div class="border-t border-base-200 mt-1 pt-2 text-right">
+  <a href="{% url 'notifications:list' %}" class="link link-primary text-xs" title="Show all your notifications">See all</a>
+</div>

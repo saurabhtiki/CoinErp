@@ -30,12 +30,14 @@ INSTALLED_APPS = [
     "django_otp",
     "django_otp.plugins.otp_totp",
     "simple_history",
+    "django_q",
     # core
     "core",
     "core.masters",
     "core.accounts",
     "core.audit",
     "core.files",
+    "core.notifications",
 ]
 
 MIDDLEWARE = [
@@ -69,6 +71,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.app_menu",
+                "core.notifications.context_processors.unread_notifications",
             ],
         },
     },
@@ -140,6 +143,22 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="erp@localhost")
+# Full address of this site, used for links inside emails. Example: https://erp.example.com
+SITE_URL = env("SITE_URL", default="http://localhost:8000")
+
+# Background jobs (django-q2). The queue is kept in the database, so no Redis is needed.
+# Docker runs them in the "worker" container. With sync=True (dev, tests) they run at once, no worker needed.
+Q_CLUSTER = {
+    "name": "erp",
+    "orm": "default",
+    "workers": env.int("Q_WORKERS", default=2),
+    "timeout": 90,  # seconds one job may take
+    "retry": 120,  # must be longer than timeout
+    "catch_up": False,
+    "sync": env.bool("Q_SYNC", default=False),
+}
+# A failed email is tried 3 times in all, waiting this many seconds between tries.
+NOTIFY_RETRY_WAITS = (10, 30)
 
 LOGGING = {
     "version": 1,

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <h1 class="text-2xl font-bold flex-1">Notifications</h1>
+  {% if unread_notifications %}
+    <form method="post" action="{% url 'notifications:read_all' %}">{% csrf_token %}
+      <button class="btn btn-ghost btn-sm" title="Mark every notification as read">Mark all as read</button>
+    </form>
+  {% endif %}
+</div>
+
+{% if page.object_list %}
+  <ul class="list bg-base-100 rounded-box shadow-sm" id="notifications">
+    {% for item in page %}
+      <li class="list-row">
+        <div>{% if not item.read_at %}<span class="status status-primary" aria-label="unread" title="Not read yet"></span>{% endif %}</div>
+        <div>
+          <a href="{% url 'notifications:open' item.pk %}" class="{% if not item.read_at %}font-semibold{% endif %} link link-hover" title="Open this notification">{{ item.title }}</a>
+          {% if item.message %}<p class="text-sm text-base-content/80 whitespace-pre-line">{{ item.message }}</p>{% endif %}
+          <p class="text-xs text-base-content/70" title="{{ item.created_at|date:'d-m-Y H:i' }}">{{ item.created_at|date:"d-m-Y H:i" }}</p>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if page.has_other_pages %}
+    <div class="join mt-4">
+      {% if page.has_previous %}<a class="join-item btn btn-sm" href="?page={{ page.previous_page_number }}" title="Newer notifications">«</a>{% endif %}
+      <span class="join-item btn btn-sm btn-disabled">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="join-item btn btn-sm" href="?page={{ page.next_page_number }}" title="Older notifications">»</a>{% endif %}
+    </div>
+  {% endif %}
+{% else %}
+  <div role="alert" class="alert alert-info alert-soft">No notifications yet. Messages about your work will show here.</div>
+{% endif %}
+{% endblock %}

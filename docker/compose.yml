@@ -27,6 +27,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Background jobs (emails, later WhatsApp and reports). Same image as web.
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["python", "manage.py", "qcluster"]
+    env_file: ../.env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+    volumes:
+      - media:/app/private_media
+    depends_on:
+      - web  # web runs the migrations first
+    restart: unless-stopped
+
   nginx:
     image: nginx:1.27-alpine
     ports:

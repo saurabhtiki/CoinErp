@@ -46,6 +46,11 @@ Services are tested on a test-only demo app (`tests/`), so nothing fake shows in
 - `NotificationLog`: user, channel, title, status, error, sent_at. Failed email retried 3 times.
 - No per-user on/off switch for now.
 - Tests: email sent and logged; failure logged and retried; bell shows only your own notifications.
+- Built: `core/notifications` (`Notification` = bell message, `NotificationLog` = every send). `notify()` default
+  channels email + in-app; email goes through `async_task` (django-q2, ORM queue; `Q_SYNC` runs it at once in
+  dev/tests) and is tried 3 times (`NOTIFY_RETRY_WAITS`). Email links use `SITE_URL`. Bell in the top bar
+  (unread badge, latest 8 via HTMX, `/notifications/` page, mark all read). Log is read-only in admin.
+  Docker `worker` container runs `qcluster`.
 
 ## Step 9. Approvals engine
 

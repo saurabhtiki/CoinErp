@@ -8,5 +8,6 @@ urlpatterns = [
     path("masters/", include("core.masters.urls")),
     path("history/", include("core.audit.urls")),
     path("files/", include("core.files.urls")),
+    path("notifications/", include("core.notifications.urls")),
     path("", include("core.urls")),
 ]
