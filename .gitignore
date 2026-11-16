@@ -4,6 +4,7 @@
 !.env.example
 !.env.prod.example
 !.env.sandbox.example
+!.env.edge.example
 
 # Python / uv
 __pycache__/

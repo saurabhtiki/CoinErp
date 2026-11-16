@@ -29,7 +29,7 @@ COPY . .
 RUN SECRET_KEY=build-only python manage.py tailwind build \
  && SECRET_KEY=build-only python manage.py collectstatic --noinput
 
-RUN useradd --create-home erp && mkdir -p /app/private_media /app/backups && chown -R erp /app/private_media /app/backups
+RUN useradd --create-home erp && mkdir -p /app/private_media /app/backups && chown -R erp /app/private_media /app/backups /app/staticfiles
 USER erp
 
 EXPOSE 8000

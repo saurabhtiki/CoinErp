@@ -1,0 +1,33 @@
+# The front door (HTTPS) for production and sandbox. Start it AFTER both app projects have started once
+# (it reads their static-files volumes):
+#   docker compose -p coinerp-edge -f docker/caddy/compose.yml up -d
+# Settings: copy .env.edge.example to .env.edge and fill it in.
+name: coinerp-edge
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    env_file: ../../.env.edge
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # reach the apps, which listen on this machine's 127.0.0.1
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - prod_static:/srv/static-prod:ro
+      - sandbox_static:/srv/static-sandbox:ro
+      - caddy_data:/data  # certificates: keep this, or Let's Encrypt limits are hit
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  prod_static:
+    external: true
+    name: coinerp-prod_static
+  sandbox_static:
+    external: true
+    name: coinerp-sandbox_static
+  caddy_data:
+  caddy_config:

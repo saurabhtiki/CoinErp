@@ -1,0 +1,33 @@
+# Caddy: the front door of the server. Gets and renews HTTPS certificates by itself (Let's Encrypt).
+# One Caddy serves both production and sandbox. Values come from .env.edge (see .env.edge.example).
+
+{
+	email {$ACME_EMAIL}
+}
+
+# Shared by both sites. {args[0]} = the port the app listens on (on this machine only),
+# {args[1]} = the folder with its collected static files (CSS, JS).
+(app) {
+	encode zstd gzip
+	request_body {
+		max_size 20MB
+	}
+	handle_path /static/* {
+		root * {args[1]}
+		file_server
+	}
+	# Uploaded files are NOT served here: they go through Django's permission-checked view.
+	reverse_proxy host.docker.internal:{args[0]}
+}
+
+{$PROD_DOMAIN} {
+	import app 8000 /srv/static-prod
+}
+
+# The sandbox asks for an extra shared password before the ERP login page.
+{$SANDBOX_DOMAIN} {
+	basic_auth {
+		{$SANDBOX_USER} {$SANDBOX_PASSWORD_HASH}
+	}
+	import app 8001 /srv/static-sandbox
+}
