@@ -1,4 +1,4 @@
-# Plan: Phase 1 — Foundation (confirmed; Steps 1–4 done)
+# Plan: Phase 1 — Foundation (confirmed; Steps 1–5 done)
 
 Goal: a working, secure shell of the ERP. Users can log in, see only their companies,
 and see a sidebar + home dashboard. No business apps yet.
@@ -63,6 +63,10 @@ We build it in 5 small steps. Each step = code + tests + Git commit, and I stop 
 - `core/registry.py`: each app registers name, icon, URL, permission, optional dashboard widget.
 - Sidebar and home dashboard built from the registry, showing only apps the user may open.
 - Tests: user sees only allowed apps in the sidebar.
+- Built: `core/registry.py` (AppEntry, register in AppConfig.ready, `apps_for_user`, `dashboard_cards`);
+  access layer `apps_user_can_open` (one query); sidebar via `core.context_processors.app_menu`;
+  user menu (change password, Admin for staff, sign out); Masters widget counts in `masters/services.py`.
+  A failing widget shows a note and is logged, the dashboard still opens.
 
 ---
 

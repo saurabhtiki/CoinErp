@@ -52,6 +52,16 @@ def user_can_open_app(user, app_code):
     return any(app_code in (app_codes or []) for _, app_codes, _ in _role_links(user))
 
 
+def apps_user_can_open(user, app_codes):
+    """The app codes (from app_codes) the user may open. One query, for building menus."""
+    if not _is_usable(user):
+        return []
+    if user.is_superuser:
+        return list(app_codes)
+    granted = {code for _, codes, _ in _role_links(user) for code in (codes or [])}
+    return [code for code in app_codes if code in granted]
+
+
 def app_access_by_company(user, app_code):
     """Two sets of company ids for one app: where the user sees all rows, and where only own rows."""
     own_only_flags = {}

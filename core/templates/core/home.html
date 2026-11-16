@@ -1,6 +1,31 @@
 {% extends "base.html" %}
+{% load nav_tags %}
 {% block content %}
-{# Temporary home page. Step 5 adds the dashboard built from the app registry. #}
-<h1 class="text-2xl font-bold mb-4">Welcome, {{ request.user.first_name|default:request.user.email }}</h1>
-<a href="{% url 'masters:list' 'companies' %}" class="btn btn-primary" title="Companies, branches, employees, vendors and customers">Open masters</a>
+<h1 class="text-2xl font-bold mb-1">Welcome, {{ request.user.first_name|default:request.user.email }}</h1>
+<p class="text-base-content/70 mb-6">Your apps are below and in the menu on the left.</p>
+
+{% if cards %}
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3" id="dashboard">
+    {% for card in cards %}
+      <section class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+          <h2 class="card-title">{% icon card.app.icon "size-6" %} {{ card.app.name }}</h2>
+          {% if card.app.description %}<p class="text-sm text-base-content/70">{{ card.app.description }}</p>{% endif %}
+          {% if card.error %}
+            <div role="alert" class="alert alert-warning alert-soft text-sm">{{ card.error }}</div>
+          {% elif card.data %}
+            {% include card.app.widget_template with data=card.data %}
+          {% endif %}
+          <div class="card-actions justify-end mt-2">
+            <a href="{{ card.app.url }}" class="btn btn-primary btn-sm" title="Open {{ card.app.name }}">Open</a>
+          </div>
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+{% else %}
+  <div role="alert" class="alert alert-info alert-soft">
+    You do not have any apps yet. Ask your admin to give you a role.
+  </div>
+{% endif %}
 {% endblock %}

@@ -3,11 +3,16 @@ from django.http import HttpResponse
 from django.views import View
 from django.views.generic import TemplateView
 
+from core.registry import dashboard_cards
+
 
 class HomeView(LoginRequiredMixin, TemplateView):
-    """Home dashboard. Widgets from the app registry are added in Phase 1 step 5."""
+    """Home dashboard: one card per app the user may open, from the app registry."""
 
     template_name = "core/home.html"
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(cards=dashboard_cards(self.request.user), **kwargs)
 
 
 class HealthCheckView(View):

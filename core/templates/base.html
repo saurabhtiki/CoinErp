@@ -1,4 +1,4 @@
-{% load static tailwind_cli django_htmx %}<!doctype html>
+{% load static tailwind_cli django_htmx nav_tags %}<!doctype html>
 <html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
@@ -11,17 +11,60 @@
   <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
 </head>
 <body class="min-h-screen bg-base-200" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-  {# Simple top bar. Step 5 replaces it with the sidebar built from the app registry. #}
-  <header class="navbar bg-base-100 shadow-sm px-4 gap-2">
-    <a href="{% url 'core:home' %}" class="btn btn-ghost text-lg" title="Home">Group ERP</a>
-    <div class="flex-1"></div>
-    <span class="text-sm text-base-content/70 hidden sm:inline">{{ request.user.get_full_name|default:request.user.email }}</span>
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
-      <button type="submit" class="btn btn-ghost btn-sm" title="Sign out of Group ERP">Sign out</button>
-    </form>
-  </header>
-  <main class="p-4 max-w-7xl mx-auto">
-    {% block content %}{% endblock %}
-  </main>
+<div class="drawer lg:drawer-open">
+  <input id="app-drawer" type="checkbox" class="drawer-toggle" aria-label="Show or hide the menu">
+
+  <div class="drawer-content flex flex-col min-h-screen">
+    {# Top bar: menu button (small screens), page title area, user menu #}
+    <header class="navbar bg-base-100 shadow-sm px-4 gap-2 sticky top-0 z-10">
+      <label for="app-drawer" class="btn btn-ghost btn-square lg:hidden" title="Open the menu">{% icon "menu" %}</label>
+      <div class="flex-1"></div>
+      <div class="dropdown dropdown-end">
+        <div tabindex="0" role="button" class="btn btn-ghost gap-2" title="Your account">
+          {% icon "user" %}
+          <span class="hidden sm:inline max-w-48 truncate">{{ request.user.get_full_name|default:request.user.email }}</span>
+        </div>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-20 w-60 p-2 shadow-sm">
+          <li class="menu-title truncate" title="{{ request.user.email }}">{{ request.user.email }}</li>
+          <li><a href="{% url 'password_change' %}" title="Choose a new password">Change password</a></li>
+          {% if request.user.is_staff %}
+            <li><a href="{% url 'admin:index' %}" title="Users, roles and master records">Admin</a></li>
+          {% endif %}
+          <li>
+            <form method="post" action="{% url 'logout' %}" class="p-0">{% csrf_token %}
+              <button type="submit" class="w-full text-left px-3 py-1.5" title="Sign out of Group ERP">Sign out</button>
+            </form>
+          </li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="p-4 w-full max-w-7xl mx-auto">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  {# Sidebar: built from the app registry; only apps this user may open. #}
+  <div class="drawer-side z-30">
+    <label for="app-drawer" aria-label="Close the menu" class="drawer-overlay"></label>
+    <nav class="bg-base-100 min-h-full w-64 flex flex-col border-r border-base-300" aria-label="Main menu">
+      <a href="{% url 'core:home' %}" class="text-lg font-bold px-6 py-4" title="Go to the home dashboard">Group ERP</a>
+      <ul class="menu w-full gap-1" id="app-menu">
+        <li>
+          <a href="{% url 'core:home' %}" class="{% if request.path == '/' %}menu-active{% endif %}" title="Your dashboard">
+            {% icon "home" %} Home
+          </a>
+        </li>
+        {% for app in nav_apps %}
+          <li>
+            <a href="{{ app.url }}" class="{% if request.path|in_section:app.section %}menu-active{% endif %}" title="{{ app.description|default:app.name }}">
+              {% icon app.icon %} {{ app.name }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </div>
+</div>
 </body>
 </html>
