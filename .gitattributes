@@ -1,0 +1,5 @@
+# Keep Unix line endings so shell scripts work inside Docker (Linux)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
