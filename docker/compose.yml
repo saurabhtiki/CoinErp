@@ -1,10 +1,18 @@
-# Run from the project root:  docker compose -f docker/compose.yml up -d --build
-name: coinerp
+# One file runs both servers. Each server has its own env file, project name and ports:
+#
+#   Production:
+#     docker compose -p coinerp-prod --env-file .env.prod -f docker/compose.yml up -d --build
+#   Sandbox (test copy with fake data):
+#     docker compose -p coinerp-sandbox --env-file .env.sandbox -f docker/compose.yml up -d --build
+#
+# The project name (-p) gives each server its own database and uploaded-files volumes.
+# --env-file sets ENV_FILE and HTTP_PORT below (see .env.prod.example / .env.sandbox.example).
+# Without any of this, `docker compose -f docker/compose.yml up -d --build` uses ../.env on port 80.
 
 services:
   db:
     image: postgres:17
-    env_file: ../.env
+    env_file: ${ENV_FILE:-../.env}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,7 +25,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    env_file: ../.env
+    env_file: ${ENV_FILE:-../.env}
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.prod
     volumes:
@@ -33,7 +41,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     command: ["python", "manage.py", "qcluster"]
-    env_file: ../.env
+    env_file: ${ENV_FILE:-../.env}
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.prod
     volumes:
@@ -45,7 +53,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     ports:
-      - "80:80"
+      - "${HTTP_PORT:-80}:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:

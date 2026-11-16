@@ -75,6 +75,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.app_menu",
+                "core.context_processors.environment",
                 "core.notifications.context_processors.unread_notifications",
                 "core.approvals.context_processors.waiting_approvals",
             ],
@@ -141,7 +142,16 @@ TAILWIND_CLI_USE_DAISY_UI = True
 TAILWIND_CLI_SRC_CSS = "frontend/source.css"
 TAILWIND_CLI_DIST_CSS = "css/tailwind.css"
 
+# Which server this is: "production" or "sandbox" (test copy with fake data only).
+ENVIRONMENT = env("ENVIRONMENT", default="production")
+IS_SANDBOX = ENVIRONMENT == "sandbox"
+# Password of the fake demo users (sandbox only). Change it in the sandbox .env.
+DEMO_PASSWORD = env("DEMO_PASSWORD", default="")
+
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+if IS_SANDBOX:
+    # The sandbox never sends real mail: it is written to the log (and shown on the "Sent mail" page).
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 EMAIL_HOST = env("EMAIL_HOST", default="localhost")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")

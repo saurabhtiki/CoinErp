@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
@@ -18,6 +20,16 @@ class NotificationListView(LoginRequiredMixin, View):
             return render(request, "notifications/partials/bell_list.html", {"items": rows[:LATEST_IN_BELL]})
         page = Paginator(rows, 25).get_page(request.GET.get("page"))
         return render(request, "notifications/list.html", {"page": page})
+
+
+class SentMailView(LoginRequiredMixin, View):
+    """Sandbox only: the emails that were not really sent. On production this page does not exist (404)."""
+
+    def get(self, request):
+        if not settings.IS_SANDBOX:
+            raise Http404("Sent mail is shown on the sandbox only.")
+        page = Paginator(services.sandbox_mail_for(request.user), 25).get_page(request.GET.get("page"))
+        return render(request, "notifications/sent_mail.html", {"page": page})
 
 
 class OpenNotificationView(LoginRequiredMixin, View):

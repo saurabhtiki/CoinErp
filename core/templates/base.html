@@ -12,6 +12,7 @@
   <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
 </head>
 <body class="min-h-screen bg-base-200" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+{% include "core/partials/sandbox_bar.html" %}
 <div class="drawer lg:drawer-open print:block">
   <input id="app-drawer" type="checkbox" class="drawer-toggle" aria-label="Show or hide the menu">
 

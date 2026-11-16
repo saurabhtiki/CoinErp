@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Sent mail{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Sent mail (sandbox)</h1>
+<p class="text-sm text-base-content/70 mb-4">The sandbox never sends real email. These are the emails it would have sent.</p>
+
+{% if page.object_list %}
+  <ul class="list bg-base-100 rounded-box shadow-sm" id="sent-mail">
+    {% for item in page %}
+      <li class="list-row">
+        <div class="list-col-grow">
+          <p class="font-semibold">{{ item.title }}</p>
+          <p class="text-xs text-base-content/70">To {{ item.user.email }} · {{ item.created_at|date:"d-m-Y H:i" }} · {{ item.get_status_display }}</p>
+          {% if item.message %}<p class="text-sm whitespace-pre-line mt-1">{{ item.message }}</p>{% endif %}
+          {% if item.link %}<p class="text-xs mt-1">Link: {{ item.link }}</p>{% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if page.has_other_pages %}
+    <div class="join mt-4">
+      {% if page.has_previous %}<a class="join-item btn btn-sm" href="?page={{ page.previous_page_number }}" title="Newer mail">«</a>{% endif %}
+      <span class="join-item btn btn-sm btn-disabled">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="join-item btn btn-sm" href="?page={{ page.next_page_number }}" title="Older mail">»</a>{% endif %}
+    </div>
+  {% endif %}
+{% else %}
+  <div role="alert" class="alert alert-info alert-soft">No email yet. When something sends an email, it shows here.</div>
+{% endif %}
+{% endblock %}

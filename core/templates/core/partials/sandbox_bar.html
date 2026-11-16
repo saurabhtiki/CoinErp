@@ -1,0 +1,9 @@
+{% if is_sandbox %}
+<div id="sandbox-bar" class="bg-warning text-warning-content text-center text-sm font-semibold py-1 px-2 print:hidden"
+     title="This is the test copy. Nothing here is real and no real email is sent.">
+  SANDBOX: test data only
+  {% if request.user.is_authenticated %}
+    <a href="{% url 'notifications:sent_mail' %}" class="underline ml-2" title="Emails the sandbox would have sent">Sent mail</a>
+  {% endif %}
+</div>
+{% endif %}

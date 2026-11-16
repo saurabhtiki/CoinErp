@@ -1,6 +1,12 @@
+from django.conf import settings
 from django.utils.functional import SimpleLazyObject
 
 from core.registry import apps_for_user
+
+
+def environment(request):
+    """`is_sandbox`: true on the test server, so every page can show the orange bar."""
+    return {"is_sandbox": settings.IS_SANDBOX}
 
 
 def app_menu(request):

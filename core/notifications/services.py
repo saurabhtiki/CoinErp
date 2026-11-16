@@ -84,6 +84,12 @@ def notifications_for(user):
     return Notification.objects.filter(user=user)
 
 
+def sandbox_mail_for(user):
+    """Emails the sandbox "sent" (it only logs them). A superuser sees all; everyone else sees their own."""
+    rows = NotificationLog.objects.filter(channel=Channel.EMAIL).select_related("user")
+    return rows if user.is_superuser else rows.filter(user=user)
+
+
 def unread_count(user):
     if not user.is_authenticated:
         return 0

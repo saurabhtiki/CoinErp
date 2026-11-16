@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+!.env.prod.example
+!.env.sandbox.example
 
 # Python / uv
 __pycache__/
