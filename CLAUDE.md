@@ -2,7 +2,7 @@
 
 Group ERP platform (see `project.md`): one shared `core` + plug-in apps in `apps/`. Keep each app self-contained so it could be reused elsewhere.
 
-Current phase: Phase 1 Foundation done (Steps 1–5 + review fixes); next: plan Phase 2. Plan: `docs/plan.md`.
+Current phase: Phase 2 Core services — plan confirmed, next: Step 6 Audit. Plan: `docs/plan.md`.
 
 
 
