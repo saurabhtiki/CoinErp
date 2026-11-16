@@ -16,7 +16,7 @@ __pycache__/
 *.sqlite3-journal
 private_media/
 staticfiles/
-backups/
+/backups/
 
 # Built CSS and downloaded Tailwind binary
 assets/css/tailwind.css

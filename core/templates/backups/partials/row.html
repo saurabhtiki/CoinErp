@@ -1,0 +1,17 @@
+<tr>
+  <td data-dt-col="created_at" class="dt-sticky whitespace-nowrap">{{ row.created_at|date:"d-m-Y H:i" }}</td>
+  <td data-dt-col="kind">{{ row.get_kind_display }}</td>
+  <td data-dt-col="status">
+    <span class="badge badge-sm {% if row.status == 'ok' %}badge-success{% elif row.status == 'failed' %}badge-error{% elif row.status == 'running' %}badge-info{% else %}badge-ghost{% endif %}"
+          {% if row.error %}title="{{ row.error }}"{% endif %}>{{ row.get_status_display }}</span>
+    {% if row.error %}<span class="text-xs text-error block max-w-xs truncate" title="{{ row.error }}">{{ row.error }}</span>{% endif %}
+  </td>
+  <td class="whitespace-nowrap">{% if row.size_bytes %}{{ row.size_bytes|filesizeformat }}{% endif %}</td>
+  <td class="text-xs whitespace-nowrap">{% if row.last_downloaded_at %}{{ row.downloaded_by_name|default:"Someone" }}, {{ row.last_downloaded_at|date:"d-m-Y H:i" }}{% endif %}</td>
+  <td class="text-right whitespace-nowrap">
+    {% if row.status == 'ok' %}
+      <a href="{% url 'backups:download' row.pk %}" class="btn btn-ghost btn-xs" title="Download this backup as a zip file. The download is recorded."
+         onclick="return confirm('This file holds ALL company data. Keep it safe and never email it. Download?')">Download .zip</a>
+    {% endif %}
+  </td>
+</tr>
