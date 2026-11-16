@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "core.notifications",
     "core.approvals",
     "core.reports",
+    "core.backups",
     # apps
     "apps.tasks",
 ]
@@ -136,6 +137,11 @@ STATICFILES_DIRS = [BASE_DIR / "assets"]
 MEDIA_ROOT = env.path("MEDIA_ROOT", default=BASE_DIR / "private_media")
 # File links point to the permission-checked view (core/files), never to the folder itself.
 MEDIA_URL = "/files/private/"
+
+# Backups (zip of database + uploaded files). Keep this folder on a volume that survives restarts.
+BACKUP_ROOT = env.path("BACKUP_ROOT", default=BASE_DIR / "backups")
+BACKUP_KEEP_DAILY = env.int("BACKUP_KEEP_DAILY", default=14)
+BACKUP_KEEP_WEEKLY = env.int("BACKUP_KEEP_WEEKLY", default=8)
 
 # Tailwind + DaisyUI, built without Node by django-tailwind-cli
 TAILWIND_CLI_USE_DAISY_UI = True

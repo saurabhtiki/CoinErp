@@ -49,6 +49,9 @@
           {% if request.user.is_staff %}
             <li><a href="{% url 'admin:index' %}" title="Users, roles and master records">Admin</a></li>
           {% endif %}
+          {% if request.user.is_superuser %}
+            <li><a href="{% url 'backups:list' %}" title="Backups of the database and uploaded files">Backups</a></li>
+          {% endif %}
           <li>
             <form method="post" action="{% url 'logout' %}" class="p-0">{% csrf_token %}
               <button type="submit" class="w-full text-left px-3 py-1.5" title="Sign out of Group ERP">Sign out</button>

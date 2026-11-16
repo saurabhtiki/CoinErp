@@ -30,6 +30,7 @@ services:
       DJANGO_SETTINGS_MODULE: config.settings.prod
     volumes:
       - media:/app/private_media
+      - backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -46,6 +47,7 @@ services:
       DJANGO_SETTINGS_MODULE: config.settings.prod
     volumes:
       - media:/app/private_media
+      - backups:/app/backups
     depends_on:
       - web  # web runs the migrations first
     restart: unless-stopped
@@ -63,3 +65,4 @@ services:
 volumes:
   pgdata:
   media:
+  backups:  # backup zip files
