@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <h1 class="text-2xl font-bold flex-1">{{ title }}</h1>
+  <button class="btn btn-primary btn-sm" hx-get="{% url 'tasks:new' %}" hx-target="#task-panel" hx-swap="innerHTML"
+          title="Add a one-time task">New task</button>
+</div>
+<div role="tablist" class="tabs tabs-box mb-4 overflow-x-auto flex-nowrap">
+  {% for slug, item in lists.items %}
+    <a role="tab" href="{% url 'tasks:list' slug %}" class="tab whitespace-nowrap{% if slug == view %} tab-active{% endif %}" title="{{ item.2 }}">{{ item.0 }}</a>
+  {% endfor %}
+</div>
+{% include "tasks/partials/table.html" %}
+<div id="task-panel"></div>
+{% endblock %}

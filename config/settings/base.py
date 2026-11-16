@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     "core.notifications",
     "core.approvals",
     "core.reports",
+    # apps
+    "apps.tasks",
 ]
 
 MIDDLEWARE = [

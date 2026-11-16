@@ -215,6 +215,36 @@ def test_other_company_row_gives_404_not_403(client, acme, globex):
     assert client.get(f"/notes/{theirs.pk}/").status_code == 404
 
 
+@pytest.mark.django_db
+def test_own_records_user_also_sees_rows_they_are_involved_in(acme, monkeypatch):
+    from django.db.models import Q
+
+    ravi = make_user("ravi@example.com", [acme], own_records_only=True)
+    note(acme, "mine", created_by=ravi)
+    note(acme, "shared with ravi")
+    note(acme, "not ravi's")
+    monkeypatch.setattr(Note, "involved_filter", classmethod(lambda cls, user: Q(title="shared with ravi")))
+
+    titles = set(Note.objects.for_user(ravi).values_list("title", flat=True))
+
+    assert titles == {"mine", "shared with ravi"}
+
+
+@pytest.mark.django_db
+def test_who_can_manage_a_record(acme, monkeypatch):
+    from django.db.models import Q
+
+    creator = make_user("creator@example.com", [acme], own_records_only=True)
+    viewer = make_user("viewer@example.com", [acme], own_records_only=True)
+    admin = make_user("admin@example.com", [acme])
+    record = note(acme, "shared", created_by=creator)
+    monkeypatch.setattr(Note, "involved_filter", classmethod(lambda cls, user: Q(pk=record.pk)))
+
+    assert services.can_manage_record(creator, record)
+    assert services.can_manage_record(admin, record)
+    assert services.can_see_record(viewer, record) and not services.can_manage_record(viewer, record)
+
+
 def test_view_without_app_code_fails_loudly(rf):
     from core.access.mixins import AppAccessRequiredMixin
 

@@ -1,0 +1,24 @@
+{% if not as_page %}<a href="{{ close_url }}" class="fixed inset-0 z-40 bg-black/40" aria-label="Close without saving" title="Close without saving"></a>{% endif %}
+<aside class="{% if as_page %}card bg-base-100 shadow-sm max-w-3xl p-5{% else %}fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto bg-base-100 shadow-xl p-5{% endif %}"
+       hx-target="#task-panel" hx-swap="innerHTML">
+  <div class="flex items-center gap-2 mb-2">
+    <h2 class="text-lg font-bold flex-1">New task</h2>
+    <a href="{{ close_url }}" class="btn btn-ghost btn-sm" title="Close without saving">Close</a>
+  </div>
+  <form hx-post="{% url 'tasks:new' %}">
+    {% if companies %}
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Company</legend>
+        <select name="company" class="select select-sm w-full" hx-get="{% url 'tasks:new' %}" hx-include="closest form"
+                title="The task and its people belong to this company">
+          {% for item in companies %}<option value="{{ item.pk }}"{% if item.pk == company.pk %} selected{% endif %}>{{ item }}</option>{% endfor %}
+        </select>
+      </fieldset>
+    {% else %}
+      <input type="hidden" name="company" value="{{ company.pk }}">
+    {% endif %}
+    {% include "tasks/partials/fields.html" %}
+    <p class="text-sm text-base-content/70 my-2">This is a one-time task. Actions and files can be added after you create it.</p>
+    <button class="btn btn-primary btn-sm" title="Save the task and tell the owner">Create task</button>
+  </form>
+</aside>

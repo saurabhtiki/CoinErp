@@ -105,9 +105,13 @@ def visible_rows(queryset, user):
     if user.is_superuser:
         return queryset
     all_rows, own_rows = app_access_by_company(user, queryset.model.access_app_code())
+    own = Q(created_by=user)
+    involved = queryset.model.involved_filter(user)  # e.g. a task's owner and collaborators
+    if involved is not None:
+        own |= involved
     return queryset.filter(
         Q(company_id__in=all_rows)
-        | Q(company_id__in=own_rows, created_by=user)
+        | (Q(company_id__in=own_rows) & own)
         | Q(pk__in=_waiting_for_approval(user, queryset.model))  # approvers see what waits for them
     )
 
@@ -187,6 +191,56 @@ def hidden_fields(model, user):
 def can_see_record(user, record):
     """True if this user may see this one record (any kind with a rule in visible_records)."""
     return record is not None and visible_records(type(record), user).filter(pk=record.pk).exists()
+
+
+def sees_all_rows(user, record):
+    """True if the user sees every row of this record's app in its company (an admin there)."""
+    if not _is_usable(user):
+        return False
+    if user.is_superuser:
+        return True
+    all_rows, _ = app_access_by_company(user, type(record).access_app_code())
+    return record.company_id in all_rows
+
+
+def can_manage_record(user, record):
+    """May this user change the record? Its creator, whoever runs it, or an admin of its company.
+
+    Example: a task's collaborator can see it (and comment) but cannot change its fields.
+    """
+    return can_see_record(user, record) and manages_visible_record(user, record)
+
+
+def manages_visible_record(user, record):
+    """can_manage_record for a row the user is already known to see (e.g. a list row): no extra query."""
+    return record.created_by_id == user.pk or sees_all_rows(user, record) or record.is_managed_by(user)
+
+
+def is_person_or_manager(user, person_id, record, visible=False):
+    """A person named on the record (e.g. who does a task's action), or whoever may change the record.
+
+    Pass visible=True for a record already fetched through for_user(): no extra query.
+    """
+    if person_id == user.pk:
+        return visible or can_see_record(user, record)
+    return manages_visible_record(user, record) if visible else can_manage_record(user, record)
+
+
+def is_person_or_admin(user, person_id, record, visible=False):
+    """A person named on the record (e.g. its creator or reviewer), or an admin of its company."""
+    return (visible or can_see_record(user, record)) and (person_id == user.pk or sees_all_rows(user, record))
+
+
+def users_for_app(company, app_code):
+    """Active users whose role in this company opens the app: the people a record there can be given to.
+
+    Example: users_for_app(acme, "tasks") -> everyone who can open Tasks in Acme.
+    """
+    User = apps.get_model(settings.AUTH_USER_MODEL)
+    CompanyRole = apps.get_model("accounts", "CompanyRole")
+    links = CompanyRole.objects.filter(company=company).values_list("user_id", "role__allowed_apps")
+    user_ids = {user_id for user_id, app_codes in links if app_code in (app_codes or [])}
+    return User.objects.filter(pk__in=user_ids, is_active=True)
 
 
 def can_remove_upload(user, uploaded_by_id, record):

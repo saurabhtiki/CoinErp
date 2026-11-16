@@ -54,7 +54,7 @@ def test_sidebar_shows_only_allowed_apps(client, acme, travel_app):
 def test_superuser_sees_every_app(travel_app):
     boss = User.objects.create_superuser(email="boss@example.com", password=PASSWORD)
 
-    assert [entry.code for entry in apps_for_user(boss)] == ["masters", "travel"]
+    assert [entry.code for entry in apps_for_user(boss)] == ["masters", "tasks", "travel"]
 
 
 @pytest.mark.django_db

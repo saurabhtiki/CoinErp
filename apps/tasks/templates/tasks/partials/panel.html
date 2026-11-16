@@ -1,0 +1,132 @@
+{% if not as_page %}<a href="{{ close_url }}" class="fixed inset-0 z-40 bg-black/40" aria-label="Close the task" title="Close the task"></a>{% endif %}
+<aside class="{% if as_page %}card bg-base-100 shadow-sm max-w-3xl p-5{% else %}fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto bg-base-100 shadow-xl p-5{% endif %}"
+       hx-target="#task-panel" hx-swap="innerHTML" x-data="{ tab: '{{ tab }}' }">
+  <div class="flex items-center gap-2 mb-1">
+    <h2 class="text-lg font-bold flex-1">{{ task.code }}</h2>
+    {% if task.due_date_changes %}
+      <span class="badge badge-warning badge-soft" title="The due date was moved {{ task.due_date_changes }} time{{ task.due_date_changes|pluralize }}. See the comments for the reasons.">Due date moved {{ task.due_date_changes }}×</span>
+    {% endif %}
+    <a href="{% url 'audit:record' 'tasks' 'task' task.pk %}" class="btn btn-ghost btn-sm" title="Who changed this task, and when">History</a>
+    <a href="{{ close_url }}" class="btn btn-ghost btn-sm" title="Go back to the task list">Close</a>
+  </div>
+  <p class="text-sm text-base-content/70 mb-2">{{ task.company }}. Created by {{ task.created_by.get_full_name|default:task.created_by|default:"someone" }} on {{ task.created_at|date:"d-m-Y" }}.</p>
+
+  {% if panel_error %}<div role="alert" class="alert alert-error alert-soft text-sm mb-2">{{ panel_error }}</div>{% endif %}
+  {% if not can_manage %}
+    <div role="alert" class="alert alert-info alert-soft text-sm mb-2">You can view this task, comment and add files. Only the owner, the creator or their manager can change it.</div>
+  {% endif %}
+
+  {% if can_review %}
+    <form hx-post="{% url 'tasks:review' task.pk %}" class="card card-border border-warning p-3 mb-3 gap-2">
+      <p class="text-sm font-medium">This task is waiting for your review.</p>
+      <textarea name="comment" rows="2" class="textarea textarea-sm w-full" placeholder="Comment (needed if you send it back)" aria-label="Review comment"></textarea>
+      <div class="flex gap-2">
+        <button name="decision" value="complete" class="btn btn-success btn-sm" title="The work is fine: complete the task">Complete</button>
+        <button name="decision" value="send_back" class="btn btn-outline btn-sm" title="Something must be fixed: the task goes back to In Progress">Send back</button>
+      </div>
+    </form>
+  {% endif %}
+
+  <form hx-post="{% url 'tasks:detail' task.pk %}">
+    {% include "tasks/partials/fields.html" %}
+    <div class="flex flex-wrap gap-2 mt-2">
+      {% if can_manage %}<button class="btn btn-primary btn-sm" title="Save the changes you made above">Save changes</button>{% endif %}
+      {% if can_done %}
+        <button type="button" class="btn btn-success btn-soft btn-sm" hx-post="{% url 'tasks:done' task.pk %}"
+                {% if open_actions %}hx-confirm="{{ open_actions }} action{{ open_actions|pluralize }} {{ open_actions|pluralize:'is,are' }} still open. Mark the task done anyway?"{% endif %}
+                title="Mark this task as done{% if task.reviewer_id %} (it goes to the reviewer first){% endif %}">Done</button>
+      {% endif %}
+      <span class="flex-1"></span>
+      {% if can_cancel %}
+        <button type="button" class="btn btn-ghost btn-sm text-error" hx-post="{% url 'tasks:cancel' task.pk %}"
+                hx-confirm="Cancel {{ task.code }}? It will be hidden from the lists but kept in history."
+                title="Hide this task from the lists. It is not deleted.">Cancel task</button>
+      {% endif %}
+    </div>
+  </form>
+
+  <div role="tablist" class="tabs tabs-border mt-4">
+    <button role="tab" class="tab" :class="tab === 'actions' && 'tab-active'" @click="tab = 'actions'" title="Small steps inside this task">Actions ({{ actions|length }})</button>
+    <button role="tab" class="tab" :class="tab === 'files' && 'tab-active'" @click="tab = 'files'" title="Uploaded files and web links">Files ({{ files_count }})</button>
+    <button role="tab" class="tab" :class="tab === 'comments' && 'tab-active'" @click="tab = 'comments'" title="Notes and discussion on this task">Comments ({{ comments|length }})</button>
+  </div>
+
+  <div x-show="tab === 'actions'" class="pt-3">
+    {% if actions %}
+      <ul class="list">
+        {% for action, can_change in actions %}
+          <li class="list-row items-center py-2">
+            <input type="checkbox" class="checkbox checkbox-sm" {% if action.is_done %}checked{% endif %} {% if not can_change %}disabled{% endif %}
+                   hx-post="{% url 'tasks:action' action.pk 'toggle' %}" hx-trigger="change"
+                   aria-label="Done: {{ action.title }}" title="Tick when this action is done">
+            <div class="min-w-0">
+              <div class="{% if action.is_done %}line-through text-base-content/60{% endif %}">{{ action.title }}</div>
+              <div class="text-xs {% if not action.is_done and action.due_date < today %}text-error{% else %}text-base-content/70{% endif %}">{{ action.owner.get_full_name|default:action.owner }}, due {{ action.due_date|date:"d-m-Y" }}</div>
+            </div>
+            {% if can_manage %}
+              <button class="btn btn-ghost btn-xs text-error" hx-post="{% url 'tasks:action' action.pk 'remove' %}"
+                      hx-confirm="Remove the action '{{ action.title }}'?" title="Remove this action">Remove</button>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-base-content/70">No actions yet.</p>
+    {% endif %}
+    {% if can_manage %}
+      <form hx-post="{% url 'tasks:action_add' task.pk %}" class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+        <div class="sm:col-span-3">{{ action_form.title }}{% for error in action_form.title.errors %}<p class="label text-error">{{ error }}</p>{% endfor %}</div>
+        <div title="Who does this action">{{ action_form.owner }}</div>
+        <div title="When this action is due">{{ action_form.due_date }}{% for error in action_form.due_date.errors %}<p class="label text-error">{{ error }}</p>{% endfor %}</div>
+        <button class="btn btn-sm" title="Add this small step to the task">Add action</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div x-show="tab === 'files'" x-cloak class="pt-3">
+    {% include "files/partials/panel.html" with error="" %}
+    <h3 class="font-medium mt-4 mb-1">Links</h3>
+    {% if links %}
+      <ul class="list">
+        {% for link, can_remove in links %}
+          <li class="list-row items-center py-2">
+            <div class="min-w-0">
+              <a href="{{ link.url }}" class="link link-primary break-all" target="_blank" rel="noopener noreferrer" title="Open {{ link.url }} in a new tab">{{ link.label }}</a>
+              <div class="text-xs text-base-content/70">{{ link.created_by.get_full_name|default:link.created_by|default:"Unknown" }}, {{ link.created_at|date:"d-m-Y H:i" }}</div>
+            </div>
+            {% if can_remove %}
+              <button class="btn btn-ghost btn-xs text-error" hx-post="{% url 'tasks:link_remove' link.pk %}"
+                      hx-confirm="Remove the link '{{ link.label }}'?" title="Remove this link">Remove</button>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-base-content/70">No links yet.</p>
+    {% endif %}
+    <form hx-post="{% url 'tasks:link_add' task.pk %}" class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+      <input name="label" class="input input-sm w-full" placeholder="Label" aria-label="Link label" title="A short name for the link, e.g. Bank statement">
+      <input name="url" type="url" required class="input input-sm w-full" placeholder="https://..." aria-label="Web address" title="Paste a web address, e.g. a Google Drive link">
+      <button class="btn btn-sm" title="Keep this web link with the task">Add link</button>
+    </form>
+  </div>
+
+  <div x-show="tab === 'comments'" x-cloak class="pt-3">
+    {% for comment in comments %}
+      {% if comment.is_system %}
+        <p class="text-xs text-base-content/70 py-1" title="Written by the app">{{ comment.created_at|date:"d-m-Y H:i" }}: {{ comment.text }} ({{ comment.created_by.get_full_name|default:comment.created_by|default:"system" }})</p>
+      {% else %}
+        <div class="py-2 border-b border-base-200">
+          <div class="text-xs text-base-content/70">{{ comment.created_by.get_full_name|default:comment.created_by|default:"Unknown" }}, {{ comment.created_at|date:"d-m-Y H:i" }}</div>
+          <div class="whitespace-pre-line">{{ comment.text }}</div>
+        </div>
+      {% endif %}
+    {% empty %}
+      <p class="text-sm text-base-content/70">No comments yet.</p>
+    {% endfor %}
+    <form hx-post="{% url 'tasks:comment' task.pk %}" class="mt-3 flex flex-col gap-2">
+      <textarea name="text" rows="2" required class="textarea textarea-sm w-full" placeholder="Write a comment" aria-label="Comment"></textarea>
+      <button class="btn btn-sm self-start" title="Post the comment. People on this task see it in their bell.">Post comment</button>
+    </form>
+  </div>
+</aside>

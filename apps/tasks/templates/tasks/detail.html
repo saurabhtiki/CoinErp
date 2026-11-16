@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}{{ task.code }} {{ task.title }}{% endblock %}
+{% block content %}
+<div id="task-panel">{% include "tasks/partials/panel.html" %}</div>
+{% endblock %}

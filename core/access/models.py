@@ -35,3 +35,15 @@ class BaseModel(models.Model):
     @classmethod
     def access_app_code(cls):
         return cls._meta.app_label
+
+    @classmethod
+    def involved_filter(cls, user):
+        """Extra rows a user sees under "own records only", besides the rows they created.
+
+        Return a Q, or None for nothing extra. Example: a task's owner and collaborators.
+        """
+        return None
+
+    def is_managed_by(self, user):
+        """True if this user runs this record without having created it. Example: a task's owner."""
+        return False

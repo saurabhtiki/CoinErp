@@ -1,0 +1,24 @@
+{% load task_tags %}<tr>
+  <td data-dt-col="number" class="dt-sticky whitespace-nowrap">{{ row.code }}</td>
+  <td data-dt-col="title">
+    <a href="{% url 'tasks:detail' row.pk %}" hx-get="{% url 'tasks:detail' row.pk %}" hx-target="#task-panel" hx-swap="innerHTML" hx-push-url="false"
+       class="link link-hover font-medium" title="Open this task">{{ row.title }}</a>
+    {% if row.actions_total %}<span class="badge badge-ghost badge-sm ml-1" title="{{ row.actions_done }} of {{ row.actions_total }} actions done">{{ row.actions_done }}/{{ row.actions_total }}</span>{% endif %}
+    {% if row.due_date_changes %}<span class="badge badge-warning badge-soft badge-sm ml-1" title="The due date was moved {{ row.due_date_changes }} time{{ row.due_date_changes|pluralize }}">moved {{ row.due_date_changes }}×</span>{% endif %}
+  </td>
+  <td data-dt-col="owner_name">{{ row.owner_name }}</td>
+  <td data-dt-col="category_name">{{ row.category_name|default:"—" }}</td>
+  <td data-dt-col="priority">{{ row.get_priority_display }}</td>
+  <td data-dt-col="status"><span class="badge badge-sm {% if row.status == 'completed' %}badge-success{% elif row.status == 'blocked' %}badge-error{% elif row.status == 'under_review' %}badge-warning{% elif row.status == 'in_progress' %}badge-info{% else %}badge-ghost{% endif %} whitespace-nowrap">{{ row.get_status_display }}</span></td>
+  <td data-dt-col="due_date" class="whitespace-nowrap{% if row.due_group == 'overdue' %} text-error font-medium{% endif %}">{{ row.due_date|date:"d-m-Y" }}</td>
+  <td data-dt-col="due_group" class="whitespace-nowrap{% if row.due_group == 'overdue' %} text-error{% endif %}">{% if row.due_group == 'overdue' %}Overdue{% elif row.due_group == 'today' %}Due today{% elif row.due_group == 'week' %}Next 7 days{% elif row.due_group == 'done' %}Completed{% else %}Later{% endif %}</td>
+  <td class="text-right whitespace-nowrap">
+    {% if row|can_finish:request.user %}
+      <button class="btn btn-success btn-soft btn-xs" hx-post="{% url 'tasks:done' row.pk %}" hx-vals='{"from": "list"}' hx-swap="none"
+              hx-on::response-error="alert(event.detail.xhr.responseText || 'This task could not be marked done. Reload the page and try again.')"
+              {% if row.actions_total != row.actions_done %}hx-confirm="Some actions of this task are still open. Mark it done anyway?"{% endif %}
+              title="Mark this task as done{% if row.reviewer_id %} (it goes to the reviewer first){% endif %}">Done</button>
+    {% endif %}
+    <a href="{% url 'audit:record' 'tasks' 'task' row.pk %}" class="btn btn-ghost btn-xs" title="Who changed this task, and when">History</a>
+  </td>
+</tr>
