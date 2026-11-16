@@ -3,7 +3,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from core.access import services
-from core.accounts.models import Role
+from core.accounts.models import CompanyRole, Role
 from core.masters.models import Company
 from tests.access_demo.models import Note
 
@@ -23,10 +23,14 @@ def globex():
 
 def make_user(email, companies=(), own_records_only=False, apps=(APP,), **extra):
     user = User.objects.create_user(email=email, password="a-long-password-123", first_name="X", **extra)
-    user.companies.set(companies)
-    if apps:
-        user.roles.add(Role.objects.create(name=f"role-{email}", allowed_apps=list(apps), own_records_only=own_records_only))
+    role = Role.objects.create(name=f"role-{email}", allowed_apps=list(apps), own_records_only=own_records_only)
+    for company in companies:
+        give_role(user, company, role)
     return user
+
+
+def give_role(user, company, role):
+    CompanyRole.objects.create(user=user, company=company, role=role)
 
 
 def note(company, title, created_by=None):
@@ -126,7 +130,7 @@ def test_own_records_still_limited_to_company(acme, globex):
 @pytest.mark.django_db
 def test_wider_role_for_same_app_wins_over_own_records_role(acme):
     ravi = make_user("ravi@example.com", [acme], own_records_only=True)
-    ravi.roles.add(Role.objects.create(name="Manager", allowed_apps=[APP]))
+    give_role(ravi, acme, Role.objects.create(name="Manager", allowed_apps=[APP]))
     note(acme, "someone else's")
 
     assert Note.objects.for_user(ravi).count() == 1
@@ -135,10 +139,33 @@ def test_wider_role_for_same_app_wins_over_own_records_role(acme):
 @pytest.mark.django_db
 def test_own_records_role_for_other_app_does_not_limit_this_app(acme):
     ravi = make_user("ravi@example.com", [acme])
-    ravi.roles.add(Role.objects.create(name="Travel clerk", allowed_apps=["travel"], own_records_only=True))
+    give_role(ravi, acme, Role.objects.create(name="Travel clerk", allowed_apps=["travel"], own_records_only=True))
     note(acme, "someone else's")
 
     assert Note.objects.for_user(ravi).count() == 1
+
+
+@pytest.mark.django_db
+def test_different_role_in_each_company(acme, globex):
+    ravi = make_user("ravi@example.com", [acme])  # full access in Acme
+    give_role(ravi, globex, Role.objects.create(name="Clerk", allowed_apps=[APP], own_records_only=True))
+    note(acme, "acme other")
+    note(globex, "globex other")
+    note(globex, "globex mine", created_by=ravi)
+
+    titles = set(Note.objects.for_user(ravi).values_list("title", flat=True))
+
+    assert titles == {"acme other", "globex mine"}
+
+
+@pytest.mark.django_db
+def test_role_for_other_app_in_a_company_shows_no_rows_there(acme, globex):
+    ravi = make_user("ravi@example.com", [acme])
+    give_role(ravi, globex, Role.objects.create(name="Travel", allowed_apps=["travel"]))
+    note(globex, "globex note")
+
+    assert Note.objects.for_user(ravi).count() == 0
+    assert set(services.allowed_companies(ravi)) == {acme, globex}
 
 
 # --- App rule (views) -------------------------------------------------------------

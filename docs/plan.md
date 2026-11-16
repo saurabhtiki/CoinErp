@@ -53,6 +53,9 @@ We build it in 5 small steps. Each step = code + tests + Git commit, and I stop 
   Admin goes through `core/access/admin.py` (rights from roles: app code `masters`). Bank details need
   the `masters.view_bank_details` permission. One list screen for all masters at `/masters/<name>/`.
   A simple `base.html` was added for the list screens; Step 5 adds the sidebar.
+- Change (agreed 2026-11-16): roles are per company. `accounts.CompanyRole` = user + company + role
+  (e.g. Ravi: Acme → Manager, Globex → Admin); it replaces User.companies/User.roles. Access rules
+  are applied company by company. One login can have one Employee record per company.
 
 ## Step 5. Layout, registry, dashboard
 
@@ -87,7 +90,7 @@ django-htmx, django-datatable (from GitHub), pytest, pytest-django.
     django-htmx, django-tailwind-cli, django-datatable (GitHub), pytest, pytest-django.
 14. Git: repo `github.com/saurabhtiki/CoinERP` (public), branch `main`. Commit + push after each step.
 15. Never commit `.env`, DB files, or secrets (repo is public).
-16. Superuser sees all companies; everyone else only assigned companies.
+16. Superuser sees all companies; everyone else only companies where they have a role (role per company).
 17. External user = `is_external=True`; no admin site; only role's apps + assigned companies.
 18. Locale: Asia/Kolkata, en-IN, dates `DD-MM-YYYY`, currency INR.
 19. Employee gets `employee_code` (unique per company), email, mobile.

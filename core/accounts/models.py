@@ -64,10 +64,6 @@ class User(AbstractUser):
     is_external = models.BooleanField(
         default=False, help_text="Outside user (vendor, consultant). Never gets the admin site."
     )
-    companies = models.ManyToManyField(
-        "masters.Company", blank=True, related_name="users", help_text="Companies this user can see."
-    )
-    roles = models.ManyToManyField(Role, blank=True, related_name="users")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name"]
@@ -83,3 +79,24 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         self.email = self.email.lower()
         super().save(*args, **kwargs)
+
+
+class CompanyRole(models.Model):
+    """A user's role inside one company. Example: (Ravi, Acme, Manager) and (Ravi, Globex, Admin).
+
+    A user sees a company only if they have at least one role in it.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="company_roles")
+    company = models.ForeignKey("masters.Company", on_delete=models.CASCADE, related_name="user_roles")
+    role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="company_roles")
+
+    class Meta:
+        ordering = ["company", "role"]
+        verbose_name = "company role"
+        constraints = [
+            models.UniqueConstraint(fields=["user", "company", "role"], name="unique_role_per_user_company")
+        ]
+
+    def __str__(self):
+        return f"{self.company}: {self.role}"

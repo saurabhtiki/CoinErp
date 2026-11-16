@@ -7,7 +7,8 @@ from django.urls import reverse
 from django_otp.oath import totp
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
-from core.accounts.models import Role
+from core.accounts.models import CompanyRole, Role
+from core.masters.models import Company
 
 PASSWORD = "a-long-password-123"
 User = get_user_model()
@@ -106,7 +107,11 @@ def test_user_without_2fa_role_goes_straight_in(client):
 @pytest.mark.django_db
 def test_role_with_2fa_sends_user_to_setup(client):
     user = make_user()
-    user.roles.add(Role.objects.create(name="Finance", requires_2fa=True))
+    CompanyRole.objects.create(
+        user=user,
+        company=Company.objects.create(name="Acme", code="ACME"),
+        role=Role.objects.create(name="Finance", requires_2fa=True),
+    )
     client.force_login(user)
 
     response = client.get(reverse("core:home"))
@@ -184,6 +189,29 @@ def test_wrong_login_code_keeps_user_out(client):
 
     assert b"That code is wrong or expired" in response.content
     assert client.get(reverse("core:home")).status_code == 302
+
+
+@pytest.mark.django_db
+def test_admin_sets_company_roles_on_user_page(client):
+    verified_admin(client)
+    ravi = make_user()
+    acme = Company.objects.create(name="Acme", code="ACME")
+    manager = Role.objects.create(name="Manager")
+    page = client.get(reverse("admin:accounts_user_change", args=[ravi.pk]))
+    data = {
+        key: value for key, value in page.context["adminform"].form.initial.items()
+        if key in {"email", "first_name", "last_name"}
+    }
+    data.update({
+        "is_active": "on",
+        "company_roles-TOTAL_FORMS": "1", "company_roles-INITIAL_FORMS": "0",
+        "company_roles-0-company": acme.pk, "company_roles-0-role": manager.pk,
+        "last_login_0": "", "date_joined_0": "",
+    })
+
+    client.post(reverse("admin:accounts_user_change", args=[ravi.pk]), data)
+
+    assert list(ravi.company_roles.values_list("company__code", "role__name")) == [("ACME", "Manager")]
 
 
 # --- Admin and invites ------------------------------------------------------------

@@ -93,13 +93,13 @@ class Employee(BaseModel):
     last_name = models.CharField(max_length=150, blank=True)
     email = models.EmailField(blank=True)
     mobile = models.CharField(max_length=10, blank=True, validators=[MOBILE_VALIDATOR])
-    user = models.OneToOneField(
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="employee",
-        help_text="Login account, if this employee uses the ERP.",
+        related_name="employees",
+        help_text="Login account, if this employee uses the ERP. One login can have one employee record per company.",
     )
     branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.PROTECT, related_name="employees")
     department = models.ForeignKey(
@@ -117,7 +117,8 @@ class Employee(BaseModel):
     class Meta(BaseModel.Meta):
         ordering = ["company", "first_name", "last_name"]
         constraints = [
-            models.UniqueConstraint(fields=["company", "employee_code"], name="unique_employee_code_per_company")
+            models.UniqueConstraint(fields=["company", "employee_code"], name="unique_employee_code_per_company"),
+            models.UniqueConstraint(fields=["company", "user"], name="one_employee_record_per_user_per_company"),
         ]
 
     def __str__(self):

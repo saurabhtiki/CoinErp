@@ -5,7 +5,7 @@ from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from core.accounts.models import Role
+from core.accounts.models import CompanyRole, Role
 from core.masters.models import Branch, Company, Customer, Department, Employee, Vendor
 
 User = get_user_model()
@@ -24,9 +24,9 @@ def globex():
 
 def make_user(email, companies, apps=("masters",), **extra):
     user = User.objects.create_user(email=email, password=PASSWORD, first_name="Ravi", **extra)
-    user.companies.set(companies)
-    if apps:
-        user.roles.add(Role.objects.create(name=f"role-{email}", allowed_apps=list(apps)))
+    role = Role.objects.create(name=f"role-{email}", allowed_apps=list(apps))
+    for company in companies:
+        CompanyRole.objects.create(user=user, company=company, role=role)
     return user
 
 
@@ -136,6 +136,17 @@ def test_employee_cannot_report_to_self(acme):
 
     with pytest.raises(ValidationError, match="cannot report to themselves"):
         employee.full_clean()
+
+
+@pytest.mark.django_db
+def test_one_login_can_be_employee_in_two_companies_but_once_per_company(acme, globex):
+    ravi = make_user("ravi@example.com", [acme, globex])
+    Employee.objects.create(company=acme, employee_code="E42", first_name="Ravi", designation="Manager", user=ravi)
+    Employee.objects.create(company=globex, employee_code="E07", first_name="Ravi", designation="Admin", user=ravi)
+
+    assert ravi.employees.count() == 2
+    with pytest.raises(ValidationError):
+        Employee(company=acme, employee_code="E43", first_name="Ravi", user=ravi).full_clean()
 
 
 # --- List screens -----------------------------------------------------------------

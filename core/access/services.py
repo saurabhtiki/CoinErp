@@ -1,18 +1,26 @@
 """The access rules, in one place.
 
-Rules (example: Ravi works for ACME, role "Tasks clerk" = app "tasks", own records only):
+Users get roles per company. Example: Ravi is "Tasks manager" in Acme and "Tasks clerk"
+(own records only) in Globex.
 1. Superuser sees everything.
-2. Everyone else sees only rows of their companies (Ravi: ACME rows only).
-3. If every role that opens an app says "own records only", the user sees only rows they
-   created in that app (Ravi: only his own tasks).
-4. A user may open an app only if one of their roles lists it.
+2. Everyone else sees only companies where they have a role.
+3. In each company, rows of an app are visible only if a role there opens that app.
+   If every such role says "own records only", only rows they created are visible
+   (Ravi: all Acme tasks, only his own Globex tasks).
+4. A user may open an app if any of their company roles lists it.
 """
 from django.apps import apps
 from django.conf import settings
+from django.db.models import Q
 
 
 def _is_usable(user):
     return user is not None and user.is_authenticated and user.is_active
+
+
+def _role_links(user):
+    """(company id, allowed apps, own records only) for each of the user's company roles."""
+    return user.company_roles.values_list("company_id", "role__allowed_apps", "role__own_records_only")
 
 
 def allowed_companies(user):
@@ -22,38 +30,37 @@ def allowed_companies(user):
         return Company.objects.none()
     if user.is_superuser:
         return Company.objects.all()
-    return user.companies.all()
+    return Company.objects.filter(user_roles__user=user).distinct()
 
 
 def allowed_users(user):
-    """Users the user may pick in a form: people who share at least one of their companies."""
+    """Users the user may pick in a form: people with a role in at least one of their companies."""
     User = apps.get_model(settings.AUTH_USER_MODEL)
     if not _is_usable(user):
         return User.objects.none()
     if user.is_superuser:
         return User.objects.all()
-    return User.objects.filter(companies__in=user.companies.all()).distinct()
+    return User.objects.filter(company_roles__company__in=allowed_companies(user)).distinct()
 
 
 def user_can_open_app(user, app_code):
-    """True if one of the user's roles lists this app (or the user is a superuser)."""
+    """True if one of the user's company roles lists this app (or the user is a superuser)."""
     if not _is_usable(user):
         return False
     if user.is_superuser:
         return True
-    return any(app_code in (apps or []) for apps in user.roles.values_list("allowed_apps", flat=True))
+    return any(app_code in (app_codes or []) for _, app_codes, _ in _role_links(user))
 
 
-def user_sees_own_records_only(user, app_code):
-    """True if every role that opens this app limits the user to their own records."""
-    if not _is_usable(user) or user.is_superuser:
-        return False
-    granting_roles = [
-        own_only
-        for apps, own_only in user.roles.values_list("allowed_apps", "own_records_only")
-        if app_code in (apps or [])
-    ]
-    return bool(granting_roles) and all(granting_roles)
+def app_access_by_company(user, app_code):
+    """Two sets of company ids for one app: where the user sees all rows, and where only own rows."""
+    own_only_flags = {}
+    for company_id, app_codes, own_only in _role_links(user):
+        if app_code in (app_codes or []):
+            own_only_flags.setdefault(company_id, []).append(own_only)
+    all_rows = {company_id for company_id, flags in own_only_flags.items() if not all(flags)}
+    own_rows = set(own_only_flags) - all_rows
+    return all_rows, own_rows
 
 
 def visible_rows(queryset, user):
@@ -62,10 +69,8 @@ def visible_rows(queryset, user):
         return queryset.none()
     if user.is_superuser:
         return queryset
-    queryset = queryset.filter(company__in=user.companies.all())
-    if user_sees_own_records_only(user, queryset.model.access_app_code()):
-        queryset = queryset.filter(created_by=user)
-    return queryset
+    all_rows, own_rows = app_access_by_company(user, queryset.model.access_app_code())
+    return queryset.filter(Q(company_id__in=all_rows) | Q(company_id__in=own_rows, created_by=user))
 
 
 def can_view_bank_details(user):

@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from . import services
 from .forms import UserInviteForm
-from .models import Role, User
+from .models import CompanyRole, Role, User
 
 
 def staff_only_has_permission(request):
@@ -23,6 +23,14 @@ class RoleAdmin(admin.ModelAdmin):
     search_fields = ["name"]
 
 
+class CompanyRoleInline(admin.TabularInline):
+    """Which role the user has in which company. Example: Acme → Manager, Globex → Admin."""
+
+    model = CompanyRole
+    extra = 1
+    verbose_name_plural = "Company roles (the user sees only these companies)"
+
+
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     add_form = UserInviteForm
@@ -30,16 +38,19 @@ class UserAdmin(DjangoUserAdmin):
     fieldsets = [
         (None, {"fields": ["email", "password"]}),
         ("Person", {"fields": ["first_name", "last_name", "is_external"]}),
-        ("Access", {"fields": ["companies", "roles", "is_active", "is_staff", "is_superuser"]}),
+        ("Access", {"fields": ["is_active", "is_staff", "is_superuser"]}),
         ("Dates", {"fields": ["last_login", "date_joined"]}),
     ]
     readonly_fields = ["last_login", "date_joined"]
-    filter_horizontal = ["companies", "roles"]
+    inlines = [CompanyRoleInline]
     list_display = ["email", "first_name", "last_name", "is_external", "is_active", "last_login"]
-    list_filter = ["is_external", "is_active", "is_staff", "roles", "companies"]
+    list_filter = ["is_external", "is_active", "is_staff", "company_roles__company", "company_roles__role"]
     search_fields = ["email", "first_name", "last_name"]
     ordering = ["email"]
     actions = ["resend_invite"]
+
+    def get_inlines(self, request, obj):
+        return self.inlines if obj else []  # add roles after the user is created
 
     def save_model(self, request, obj, form, change):
         if not change:
