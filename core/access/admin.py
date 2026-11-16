@@ -24,10 +24,11 @@ class HistoryAdmin(SimpleHistoryAdmin):
         return self.has_view_permission(request, obj) and listed
 
     def set_history_delta_changes(self, request, historical_records, foreign_keys_are_objs=True):
-        from core.audit.services import visible_changes
+        from core.audit.services import changes_between
 
-        for newer, older in pairwise(historical_records):
-            newer.history_delta_changes = visible_changes(newer, older, request.user)
+        pairs = list(pairwise(historical_records))
+        for (newer, _), changes in zip(pairs, changes_between(pairs, request.user), strict=True):
+            newer.history_delta_changes = changes
 
 
 class AppAccessAdminMixin:

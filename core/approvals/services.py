@@ -6,12 +6,13 @@
 
 Rules (agreed in docs/plan.md):
 - Steps run in order; any one approver of a step is enough.
-- Nobody approves their own record: the submitter is left out; a step where they are the only approver is skipped.
+- Nobody approves their own record: the submitter and the record's creator are left out; a step where only
+  they could approve is skipped.
 - A step with nobody to approve stops the submit with a clear message.
 - A step with a minimum amount is used only for amounts above it.
 - A submitted record keeps the steps it started with, even if the flow changes later.
 - Returned: back to the submitter to change and submit again (starts at step 1). Rejected: final.
-- Withdraw: by the submitter, until someone has approved a step.
+- Withdraw: by the submitter, until someone has approved a step (or any time nobody can approve the step).
 - While waiting or approved, the record cannot be changed.
 """
 import logging
@@ -79,11 +80,11 @@ def waiting_for(user):
 
 
 def can_withdraw(request, user):
-    return (
-        request.status == Status.SUBMITTED
-        and request.submitted_by_id == user.pk
-        and not request.actions.filter(kind=Kind.APPROVE).exists()
-    )
+    """The submitter may withdraw until someone approves a step, or any time it is stuck with no approver."""
+    if request.status != Status.SUBMITTED or request.submitted_by_id != user.pk:
+        return False
+    is_stuck = not request.current_approvers.exists()
+    return is_stuck or not request.actions.filter(kind=Kind.APPROVE).exists()
 
 
 # --- Working out the steps -----------------------------------------------------------
@@ -119,7 +120,15 @@ def _approver_ids(step_copy, company_id):
     return set(users.filter(is_active=True).values_list("pk", flat=True))
 
 
-def _copy_steps(flow, submitter, amount):
+def _people_left_out(submitter, record):
+    """Who may not approve: the submitter and whoever created the record.
+
+    Example: Asha creates an expense and Ravi submits it; Asha may not approve it as Ravi's manager.
+    """
+    return {submitter.pk, getattr(record, "created_by_id", None)} - {None}
+
+
+def _copy_steps(flow, submitter, amount, left_out):
     """The flow's steps for this submission, each with who approves. Raises if a step has nobody."""
     copies = []
     for step in flow.steps.select_related("approver_role").order_by("order"):
@@ -135,24 +144,31 @@ def _copy_steps(flow, submitter, amount):
             raise ValidationError(f"No approver for step '{step.name}' in {flow.company}. Ask your admin.")
         copies.append(copy)
     if not copies:
+        logger.warning("Approval flow %s has no steps that apply", flow.pk)
         raise ValidationError(f"The approval flow for {flow.company} has no steps. Ask your admin.")
-    if all(_approver_ids(copy, flow.company_id) == {submitter.pk} for copy in copies):
-        raise ValidationError("You are the only approver in this flow, and nobody approves their own record. "
-                              "Ask your admin to add another approver.")
+    if not any(_approver_ids(copy, flow.company_id) - left_out for copy in copies):
+        logger.warning("Only the submitter or creator can approve in flow %s", flow.pk)
+        raise ValidationError("Only you (or the person who created this record) could approve it, and nobody "
+                              "approves their own record. Ask your admin to add another approver.")
     return copies
 
 
 def _start_step(request, index):
-    """Move to step `index`, skipping steps where the submitter is the only approver. Past the end: approved."""
+    """Move to step `index`, skipping steps where only left-out people could approve. Past the end: approved.
+
+    If nobody at all can approve the step now (e.g. the only Finance user left), the submitter is told
+    and may withdraw, so the record is never stuck.
+    """
+    left_out = _people_left_out(request.submitted_by, request.record)
     while index < len(request.steps):
         approvers = _approver_ids(request.steps[index], request.company_id)
-        others = approvers - {request.submitted_by_id}
+        others = approvers - left_out
         if others or not approvers:
-            if not approvers:
-                logger.error("Approval %s step %r has nobody to approve it now", request.pk, request.steps[index]["name"])
             request.current_step = index
             request.save(update_fields=["current_step"])
             request.current_approvers.set(others)
+            if not approvers:
+                _tell_stuck(request)
             return
         index += 1
     request.status = Status.APPROVED
@@ -167,6 +183,14 @@ def _tell_approvers(request):
                f"{request.submitted_by} asks for your approval (step: {request.step_name}).", link=MY_APPROVALS_LINK)
 
 
+def _tell_stuck(request):
+    step_name = request.step_name
+    logger.error("Approval %s step %r has nobody to approve it now", request.pk, step_name)
+    notify(request.submitted_by, f"Approval stuck: {request.record}",
+           f"Nobody can approve step '{step_name}' now. Ask your admin to fix the approvers, or withdraw it.",
+           link=MY_APPROVALS_LINK)
+
+
 def _tell_submitter(request, title, remarks=""):
     message = f"Remarks: {remarks}" if remarks else ""
     notify(request.submitted_by, f"{title}: {request.record}", message, link=MY_APPROVALS_LINK)
@@ -178,8 +202,10 @@ def _tell_submitter(request, title, remarks=""):
 def submit(record, user, remarks=""):
     """Send a record for approval. Raises ValidationError with a user-facing message if it cannot."""
     if not can_see_record(user, record):
+        logger.warning("User %s may not submit %s #%s", user.pk, record._meta.label, record.pk)
         raise PermissionDenied("You cannot submit this record.")
     if status_of(record) in (*LOCKED_STATUSES, Status.REJECTED):
+        logger.info("Refused second submit of %s #%s", record._meta.label, record.pk)
         raise ValidationError("This record was already submitted. It cannot be submitted again.")
     app_code = record._meta.app_label
     flow = ApprovalFlow.objects.filter(app_code=app_code, company_id=record.company_id, is_active=True).first()
@@ -190,7 +216,7 @@ def submit(record, user, remarks=""):
     with transaction.atomic():
         request = ApprovalRequest.objects.create(
             record=record, company_id=record.company_id, app_code=app_code, flow=flow,
-            steps=_copy_steps(flow, user, amount), amount=amount, submitted_by=user,
+            steps=_copy_steps(flow, user, amount, _people_left_out(user, record)), amount=amount, submitted_by=user,
         )
         ApprovalAction.objects.create(request=request, kind=Kind.SUBMIT, user=user, remarks=remarks)
         _start_step(request, 0)
@@ -222,6 +248,7 @@ def approve(request, user, remarks=""):
 
 def _finish(request, user, remarks, kind, status, title):
     if not remarks.strip():
+        logger.info("User %s tried to %s approval %s without remarks", user.pk, kind, request.pk)
         raise ValidationError("Please write remarks, so the submitter knows why.")
     with transaction.atomic():
         request = _lock_for_action(request, user)
@@ -247,6 +274,7 @@ def reject(request, user, remarks):
 
 def withdraw(request, user):
     if not can_withdraw(request, user):
+        logger.info("User %s may not withdraw approval %s", user.pk, request.pk)
         raise ValidationError("Only the submitter can withdraw, and only before anyone has approved it.")
     with transaction.atomic():
         ApprovalAction.objects.create(request=request, kind=Kind.WITHDRAW, user=user)

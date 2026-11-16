@@ -147,6 +147,8 @@ EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+# Give up on a mail server that does not answer (seconds), so a stuck send is retried and logged.
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=20)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="erp@localhost")
 # Full address of this site, used for links inside emails. Example: https://erp.example.com
 SITE_URL = env("SITE_URL", default="http://localhost:8000")
@@ -157,8 +159,8 @@ Q_CLUSTER = {
     "name": "erp",
     "orm": "default",
     "workers": env.int("Q_WORKERS", default=2),
-    "timeout": 90,  # seconds one job may take
-    "retry": 120,  # must be longer than timeout
+    "timeout": 180,  # seconds one job may take: 3 email tries x 20s timeout + 40s waits fits easily
+    "retry": 240,  # must be longer than timeout
     "catch_up": False,
     "sync": env.bool("Q_SYNC", default=False),
 }

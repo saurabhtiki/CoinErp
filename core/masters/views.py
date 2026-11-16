@@ -9,6 +9,8 @@ from core.access import services
 from core.access.mixins import AppAccessRequiredMixin
 from core.reports import services as reports
 
+from .services import master_report
+
 from .models import Branch, Company, CostCentre, Customer, Department, Employee, Vendor
 
 
@@ -82,21 +84,6 @@ MASTER_LISTS = {
     "vendors": party_list(Vendor, "Vendors"),
     "customers": party_list(Customer, "Customers"),
 }
-
-
-def _column_getter(column):
-    """Field name, or a function that turns a stored value into its label (e.g. True -> "Yes")."""
-    if not column.choices:
-        return column.name
-    return lambda row: column.choices.get(getattr(row, column.name), getattr(row, column.name))
-
-
-def master_report(user, config, rows):
-    """The list as a report, with the filters and sort the user picked. One company: its header; else group."""
-    companies = services.companies_for_app(user, "masters")
-    company = companies.first() if companies.count() == 1 else None
-    columns = [(column.label, _column_getter(column)) for column in config.columns]
-    return reports.make_report(user, config.title, columns, rows, company=company, model=config.model)
 
 
 class MasterListView(AppAccessRequiredMixin, View):

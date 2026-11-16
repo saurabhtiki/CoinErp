@@ -1,5 +1,6 @@
 """Masters business logic."""
 from core.access.services import companies_for_app
+from core.reports import services as reports
 
 from .models import Customer, Employee, Vendor
 
@@ -40,3 +41,21 @@ def dashboard_counts(user):
         ("customers", "Customers", Customer.objects.for_user(user)),
     ]
     return {"counts": [{"slug": slug, "title": title, "count": rows.count()} for slug, title, rows in counts]}
+
+
+def _column_getter(column):
+    """Field name, or a function that turns a stored value into its label (e.g. True -> "Yes")."""
+    if not column.choices:
+        return column.name
+    return lambda row: column.choices.get(getattr(row, column.name), getattr(row, column.name))
+
+
+def master_report(user, config, rows):
+    """A master list as a report, with the filters and sort the user picked.
+
+    Header: the company, if the user works in just one; else "all your companies".
+    """
+    companies = companies_for_app(user, "masters")
+    company = companies.first() if companies.count() == 1 else None
+    columns = [(column.label, _column_getter(column)) for column in config.columns]
+    return reports.make_report(user, config.title, columns, rows, company=company, model=config.model)

@@ -186,3 +186,20 @@ def test_admin_user_history_pages_open_without_the_password(client, acme):
 
     assert listing.status_code == 200 and b"Ravindra" in listing.content
     assert version.status_code == 200
+
+
+@pytest.mark.django_db
+def test_history_page_looks_up_linked_records_once(client, acme, django_assert_max_num_queries):
+    from core.masters.models import Branch, Employee
+
+    branches = [Branch.objects.create(company=acme, name=f"Branch {number}", code=f"B{number}") for number in range(6)]
+    employee = Employee.objects.create(company=acme, employee_code="E1", first_name="Asha")
+    for branch in branches:  # 6 changes of a linked record
+        employee.branch = branch
+        employee.save()
+    client.force_login(make_user("ravi@example.com", [acme]))
+
+    with django_assert_max_num_queries(12):
+        page = client.get(history_url(employee)).content.decode()
+
+    assert "Branch 0 (B0)" in page and "Branch 5 (B5)" in page

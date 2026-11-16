@@ -42,6 +42,7 @@ class ActView(LoginRequiredMixin, View):
         try:
             approval = do_action(approval, request.user, remarks)
         except ValidationError as refused:
+            logger.info("Approval action %s refused for user %s: %s", action, request.user.pk, refused.messages)
             context = {"item": approval, "error": " ".join(refused.messages), "remarks": remarks}
             return render(request, "approvals/partials/card.html", context)
         if not request.htmx:
@@ -75,6 +76,7 @@ class RecordApprovalView(LoginRequiredMixin, View):
             if request.POST.get("action") == "withdraw":
                 latest = services.latest_request(record)
                 if latest is None:
+                    logger.info("Nothing to withdraw on %s #%s", record._meta.label, record.pk)
                     raise ValidationError("There is nothing to withdraw.")
                 services.withdraw(latest, request.user)
             else:

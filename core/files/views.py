@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
-from core.access.services import can_see_record, visible_records
+from core.access.services import can_change_files, can_see_record, visible_records
 
 from . import services
 from .models import FileAttachment
@@ -68,6 +68,7 @@ class RecordFilesView(LoginRequiredMixin, View):
             services.attach(record, request.FILES.get("file"), request.user)
         except ValidationError as refused:
             error = " ".join(refused.messages)
+            logger.info("Upload refused for user %s: %s", request.user.pk, error)
         if not request.htmx and error is None:
             return redirect(request.path)
         return self.render(request, record, error=error)
@@ -81,6 +82,7 @@ class RecordFilesView(LoginRequiredMixin, View):
             "upload_url": reverse("files:record", args=[meta.app_label, meta.model_name, record.pk]),
             "items": [(item, services.can_remove(item, request.user)) for item in services.attachments_for(record)],
             "error": error,
+            "can_upload": can_change_files(request.user, record),
         }
         template = "files/partials/panel.html" if request.htmx else "files/record_files.html"
         return render(request, template, context)

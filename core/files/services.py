@@ -10,7 +10,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
-from core.access.services import can_remove_upload, can_see_record
+from core.access.services import can_change_files, can_remove_upload, can_see_record
 
 from .models import FileAttachment
 
@@ -36,8 +36,13 @@ def attachments_for(record):
 def attach(record, uploaded_file, user):
     """Save an uploaded file on a record. Raises ValidationError with a user-facing message if refused."""
     if not can_see_record(user, record):
+        logger.warning("User %s may not add files to %s #%s", user.pk, record._meta.label, record.pk)
         raise PermissionDenied("You cannot add files to this record.")
+    if not can_change_files(user, record):
+        logger.info("Refused upload to locked %s #%s", record._meta.label, record.pk)
+        raise ValidationError("This record is waiting for approval or already approved, so its files cannot change.")
     if uploaded_file is None:
+        logger.info("Upload to %s #%s without a file", record._meta.label, record.pk)
         raise ValidationError("Choose a file first.")
     attachment = FileAttachment(
         record=record,
@@ -60,7 +65,10 @@ def remove(attachment, user):
     """Soft delete: hidden everywhere, kept on disk and in history."""
     if not can_remove(attachment, user):
         logger.warning("User %s may not delete attachment %s", user.pk, attachment.pk)
-        raise PermissionDenied("Only the person who uploaded this file, or an admin, can delete it.")
+        raise PermissionDenied(
+            "Only the person who uploaded this file, or an admin, can delete it, "
+            "and not while the record waits for approval or once it is approved."
+        )
     attachment.is_deleted = True
     attachment.deleted_by = user
     attachment.deleted_at = timezone.now()

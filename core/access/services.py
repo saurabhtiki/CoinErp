@@ -109,11 +109,10 @@ def visible_rows(queryset, user):
     involved = queryset.model.involved_filter(user)  # e.g. a task's owner and collaborators
     if involved is not None:
         own |= involved
-    return queryset.filter(
-        Q(company_id__in=all_rows)
-        | (Q(company_id__in=own_rows) & own)
-        | Q(pk__in=_waiting_for_approval(user, queryset.model))  # approvers see what waits for them
-    )
+    visible = Q(company_id__in=all_rows) | (Q(company_id__in=own_rows) & own)
+    if getattr(queryset.model, "uses_approvals", False):
+        visible |= Q(pk__in=_waiting_for_approval(user, queryset.model))  # approvers see what waits for them
+    return queryset.filter(visible)
 
 
 def _waiting_for_approval(user, model):
@@ -243,6 +242,12 @@ def users_for_app(company, app_code):
     return User.objects.filter(pk__in=user_ids, is_active=True)
 
 
+def can_change_files(user, record):
+    """Files may be added on records the user can see, but not while the record waits for approval or once
+    it is approved (the approver must see exactly what they approved)."""
+    return can_see_record(user, record) and not record_is_locked(record)
+
+
 def can_remove_upload(user, uploaded_by_id, record):
-    """Files are removed by whoever uploaded them, or by staff, and only on records the user can see."""
-    return can_see_record(user, record) and (uploaded_by_id == user.pk or can_use_admin(user))
+    """Files are removed by whoever uploaded them, or by staff, and only while the files may change."""
+    return can_change_files(user, record) and (uploaded_by_id == user.pk or can_use_admin(user))

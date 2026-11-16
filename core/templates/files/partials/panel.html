@@ -21,6 +21,7 @@
       <div role="alert" class="alert alert-info alert-soft text-sm">No files yet. Files you upload will show here.</div>
     {% endif %}
 
+    {% if can_upload %}
     <form hx-post="{{ upload_url }}" hx-encoding="multipart/form-data" class="flex flex-wrap items-end gap-2">
       <fieldset class="fieldset flex-1 min-w-60">
         <legend class="fieldset-legend">Add a file</legend>
@@ -30,5 +31,8 @@
       </fieldset>
       <button class="btn btn-primary btn-sm mb-6" title="Upload the chosen file">Upload</button>
     </form>
+    {% else %}
+      <p class="text-sm text-base-content/70">Files cannot be added or removed while this record waits for approval or once it is approved.</p>
+    {% endif %}
   </div>
 </section>

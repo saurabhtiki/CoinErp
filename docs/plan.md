@@ -1,4 +1,4 @@
-# Plan: Phase 2 — Core services (confirmed 2026-11-16; Steps 6–10 built)
+# Plan: Phase 2 — Core services (confirmed 2026-11-16; done, Steps 6–10 + review fixes)
 
 Goal: the shared services every app will use: history, files, notifications, approvals, reports.
 No business app yet (Tasks comes in Phase 3). Phase 1 plan: `docs/phase1-plan.md`.
@@ -119,3 +119,15 @@ django-simple-history, django-q2, openpyxl, python-docx.
 12. No approver for a step → submit blocked with a clear message.
 13. Submitted records keep their original steps.
 14. "My approvals" screen in the sidebar.
+
+## Review fixes (after Step 10)
+
+- Approvals: the record's creator is left out as an approver too (not only the submitter).
+- Approvals: a step with nobody to approve tells the submitter, who may then withdraw (never stuck).
+- Files cannot be added or removed while a record waits for approval or once it is approved (`can_change_files`).
+- Email gives up after `EMAIL_TIMEOUT` (20s) so a silent mail server is retried and logged; job timeout 180s.
+- `for_user()` adds the "waiting for my approval" check only for models that use approvals.
+- History pages look up linked records once per field, not once per version.
+- Master report building moved to `core/masters/services.py`; missing error logs added.
+- Admin bulk delete of locked records is refused (Django checks each row; now covered by a test).
+- The print report keeps a plain table on purpose (fixed print layout of rows django-datatable already filtered).

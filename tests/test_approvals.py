@@ -8,10 +8,12 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from core.accounts.models import CompanyRole, Role
 from core.approvals import services
 from core.approvals.models import ApprovalFlow, ApprovalStep
+from core.files.models import FileAttachment
 from core.masters.models import Company, Employee
 from core.notifications.models import Notification
 from tests.access_demo.models import Expense
@@ -202,7 +204,7 @@ def test_submitter_as_the_only_approver_is_refused(acme, ravi):
     flow = ApprovalFlow.objects.create(app_code=APP, company=acme, name="Only Ravi")
     ApprovalStep.objects.create(flow=flow, order=1, name="Ravi", approver_type="user", approver_user=ravi)
 
-    with pytest.raises(ValidationError, match="only approver"):
+    with pytest.raises(ValidationError, match="nobody approves their own record"):
         services.submit(expense(acme, ravi), ravi)
 
 
@@ -332,3 +334,75 @@ def test_record_panel_of_another_company_is_not_found(client, acme, ravi, gita, 
     client.force_login(gita)
 
     assert client.get(f"/approvals/record/{APP}/expense/{record.pk}/").status_code == 404
+
+
+# --- Review fixes --------------------------------------------------------------------
+
+
+def test_creator_cannot_approve_when_a_colleague_submits(acme, ravi, asha, farah, finance_role):
+    """Asha creates the expense, Ravi submits it; Asha is Ravi's manager but must not approve her own expense."""
+    CompanyRole.objects.create(user=ravi, company=acme, role=Role.objects.create(name="Team", allowed_apps=[APP]))
+    boss = Employee.objects.create(company=acme, employee_code="E1", first_name="Asha", user=asha)
+    Employee.objects.create(company=acme, employee_code="E2", first_name="Ravi", user=ravi, reports_to=boss)
+    flow = ApprovalFlow.objects.create(app_code=APP, company=acme, name="Manager then Finance")
+    ApprovalStep.objects.create(flow=flow, order=1, name="Manager", approver_type="manager")
+    ApprovalStep.objects.create(flow=flow, order=2, name="Finance", approver_type="role", approver_role=finance_role)
+
+    request = services.submit(expense(acme, asha), ravi)
+
+    assert (request.step_name, approver_emails(request)) == ("Finance", ["farah@example.com"])
+
+
+def test_step_with_nobody_left_tells_the_submitter_who_can_withdraw(acme, ravi, asha, farah, flow):
+    request = services.submit(expense(acme, ravi), ravi)
+    farah.is_active = False  # the only Finance user leaves before step 2
+    farah.save()
+
+    request = services.approve(request, asha)
+
+    assert request.status == "submitted" and approver_emails(request) == []
+    assert Notification.objects.filter(user=ravi, title="Approval stuck: Laptops").exists()
+    assert services.withdraw(request, ravi).status == "withdrawn"
+
+
+def test_files_cannot_change_while_in_approval(client, acme, ravi, flow, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    record = expense(acme, ravi)
+    url = f"/files/{APP}/expense/{record.pk}/"
+    client.force_login(ravi)
+    client.post(url, {"file": SimpleUploadedFile("quote.pdf", b"%PDF-1.4 quote")})
+    attachment = FileAttachment.objects.get()
+
+    services.submit(record, ravi)
+
+    refused = client.post(url, {"file": SimpleUploadedFile("other.pdf", b"%PDF-1.4 other")}, HTTP_HX_REQUEST="true")
+    assert b"its files cannot change" in refused.content
+    assert b"Files cannot be added or removed" in client.get(url).content
+    assert client.post(f"/files/attachments/{attachment.pk}/delete/").status_code == 403
+    assert FileAttachment.objects.filter(is_deleted=False).count() == 1
+
+
+@pytest.mark.urls("tests.access_demo.urls")
+def test_locked_record_cannot_be_bulk_deleted_in_admin(client, acme, ravi, asha, flow):
+    record = expense(acme, ravi, amount="5000")
+    services.approve(services.submit(record, ravi), asha)
+    staff = person("staff@example.com", acme, Role.objects.get(name="Clerk"), "Sam")
+    staff.is_staff = True
+    staff.save()
+    client.force_login(staff)
+
+    client.post(
+        "/admin/access_demo/expense/",
+        {"action": "delete_selected", "_selected_action": [record.pk], "post": "yes"},
+    )
+
+    assert Expense.objects.filter(pk=record.pk).exists()
+
+
+def test_models_without_approvals_skip_the_approvals_check(ravi):
+    from core.masters.models import Vendor
+
+    CompanyRole.objects.create(user=ravi, company=ravi.company_roles.get().company,
+                               role=Role.objects.create(name="Masters", allowed_apps=["masters"]))
+    assert "approvals_" not in str(Vendor.objects.for_user(ravi).query)
+    assert "approvals_" in str(Expense.objects.for_user(ravi).query)
