@@ -13,3 +13,6 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
+
+# Test-only app with a sample model for the access layer tests.
+INSTALLED_APPS = [*INSTALLED_APPS, "tests.access_demo"]  # noqa: F405

@@ -1,4 +1,4 @@
-# Plan: Phase 1 — Foundation (confirmed; Steps 1–2 done)
+# Plan: Phase 1 — Foundation (confirmed; Steps 1–3 done)
 
 Goal: a working, secure shell of the ERP. Users can log in, see only their companies,
 and see a sidebar + home dashboard. No business apps yet.
@@ -36,6 +36,9 @@ We build it in 5 small steps. Each step = code + tests + Git commit, and I stop 
 - Record-level rule: role with `own_records_only` sees only rows it created / is assigned to.
 - App-level rule: view mixin `AppAccessRequiredMixin` checks the user's role allows the app.
 - Tests: user of Company A cannot see Company B data; own-records user sees only own rows.
+- Built: `core/access` (models.py BaseModel + `for_user`, services.py rules, mixins.py
+  `AppAccessRequiredMixin` + `VisibleRowsMixin`). Own-records applies only when every role
+  that opens the app says so. Tests use a test-only `tests/access_demo` app.
 
 ## Step 4. Masters
 
