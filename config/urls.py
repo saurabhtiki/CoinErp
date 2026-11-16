@@ -7,5 +7,6 @@ urlpatterns = [
     path("accounts/", include("core.accounts.urls")),  # 2FA
     path("masters/", include("core.masters.urls")),
     path("history/", include("core.audit.urls")),
+    path("files/", include("core.files.urls")),
     path("", include("core.urls")),
 ]

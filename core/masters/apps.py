@@ -7,9 +7,13 @@ class MastersConfig(AppConfig):
     verbose_name = "Masters"
 
     def ready(self):
+        from core.files.services import protect_file_field
         from core.registry import AppEntry, register
 
+        from .models import Employee
         from .services import dashboard_counts
+
+        protect_file_field(Employee, "profile_photo")  # photo opens only for users who may see the employee
 
         register(
             AppEntry(

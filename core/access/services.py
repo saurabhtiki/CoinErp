@@ -149,3 +149,13 @@ def hidden_fields(model, user):
     if can_view_bank_details(user):
         return set()
     return set(getattr(model, "BANK_FIELDS", ()))
+
+
+def can_see_record(user, record):
+    """True if this user may see this one record (any kind with a rule in visible_records)."""
+    return record is not None and visible_records(type(record), user).filter(pk=record.pk).exists()
+
+
+def can_remove_upload(user, uploaded_by_id, record):
+    """Files are removed by whoever uploaded them, or by staff, and only on records the user can see."""
+    return can_see_record(user, record) and (uploaded_by_id == user.pk or can_use_admin(user))

@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "core.masters",
     "core.accounts",
     "core.audit",
+    "core.files",
 ]
 
 MIDDLEWARE = [
@@ -124,6 +125,8 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "assets"]
 MEDIA_ROOT = env.path("MEDIA_ROOT", default=BASE_DIR / "private_media")
+# File links point to the permission-checked view (core/files), never to the folder itself.
+MEDIA_URL = "/files/private/"
 
 # Tailwind + DaisyUI, built without Node by django-tailwind-cli
 TAILWIND_CLI_USE_DAISY_UI = True

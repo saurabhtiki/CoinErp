@@ -5,6 +5,7 @@ from simple_history.models import HistoricalRecords
 
 from core.access.models import BaseModel
 from core.access.services import allowed_companies
+from core.files.validators import validate_file_content
 
 from .fields import (
     CIN_VALIDATOR,
@@ -119,7 +120,7 @@ class Employee(BaseModel):
     profile_photo = models.FileField(
         upload_to="employees/photos/",
         blank=True,
-        validators=[PHOTO_EXTENSIONS, validate_photo_size],
+        validators=[PHOTO_EXTENSIONS, validate_photo_size, validate_file_content],
         help_text="JPG or PNG, up to 2 MB.",
     )
 

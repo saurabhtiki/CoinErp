@@ -30,6 +30,11 @@ Services are tested on a test-only demo app (`tests/`), so nothing fake shows in
 - Delete: uploader or staff; soft delete (hidden, kept, shows in history).
 - Employee profile photo is served through the same checked view.
 - Tests: other-company user gets "not found"; wrong type/size refused; deleted file not downloadable.
+- Built: `core/files` (`FileAttachment` with history, random stored names; checks type, 10 MB and that the
+  content matches the extension). `MEDIA_URL=/files/private/` so every file link goes through `PrivateFileView`
+  (access layer `can_see_record`; PDF/images open in the browser, others download; `nosniff` + `sandbox`).
+  Files page per record `/files/<app>/<model>/<id>/` (HTMX upload/delete), Files link on master rows.
+  Single file fields opt in with `protect_file_field()` (Employee photo now; Company logo in Step 10).
 
 ## Step 8. Notifications
 
