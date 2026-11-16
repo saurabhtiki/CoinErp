@@ -67,6 +67,12 @@
             {% icon "home" %} Home
           </a>
         </li>
+        <li>
+          <a href="{% url 'approvals:mine' %}" class="{% if request.path|in_section:'/approvals/' %}menu-active{% endif %}" title="Records waiting for your approval">
+            {% icon "inbox" %} My approvals
+            {% if waiting_approvals %}<span id="approvals-count" class="badge badge-sm badge-primary">{{ waiting_approvals }}</span>{% endif %}
+          </a>
+        </li>
         {% for app in nav_apps %}
           <li>
             <a href="{{ app.url }}" class="{% if request.path|in_section:app.section %}menu-active{% endif %}" title="{{ app.description|default:app.name }}">

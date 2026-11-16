@@ -75,6 +75,12 @@ Services are tested on a test-only demo app (`tests/`), so nothing fake shows in
 - Tests: full Manager → Finance path; return and resubmit; reject; withdraw; self-approval skipped;
   no approver error; amount rule; flow change does not affect submitted records; other-company user
   cannot act; locked record cannot be edited.
+- Built: `core/approvals` (models, `services.py` = submit / approve / send_back / reject / withdraw, admin to set
+  up flows, read-only request list). Apps opt in with `ApprovableMixin` (+ optional `approval_amount_field`); saving
+  a locked record raises, and admin makes it read-only. Approvers per step are worked out when the step starts;
+  the submit checks every step has someone. Access layer: `can_act_on_approval`, `record_is_locked`, and
+  `visible_rows` adds records waiting for the user. Screens: "My approvals" (sidebar badge, HTMX buttons) and a
+  record panel (`/approvals/record/<app>/<model>/<id>/`) for app pages: status, trail, Submit / Withdraw.
 
 ## Step 10. Reports helpers
 

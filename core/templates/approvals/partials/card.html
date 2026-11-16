@@ -1,0 +1,30 @@
+{% load humanize %}
+<section class="card bg-base-100 shadow-sm" id="approval-{{ item.pk }}">
+  <div class="card-body gap-3">
+    <div>
+      <p class="text-xs uppercase text-base-content/70">{{ item.app_code }} · {{ item.company }} · step: {{ item.step_name }}</p>
+      <h2 class="card-title">{{ item.record|default:"Deleted record" }}</h2>
+      <p class="text-sm text-base-content/70">
+        From {{ item.submitted_by }} on {{ item.submitted_at|date:"d-m-Y H:i" }}
+        {% if item.amount is not None %} · <span title="Amount">₹{{ item.amount|intcomma }}</span>{% endif %}
+      </p>
+    </div>
+
+    {% with trail=item.actions.all %}
+      {% include "approvals/partials/trail.html" %}
+    {% endwith %}
+
+    {% if error %}<div role="alert" class="alert alert-error alert-soft text-sm">{{ error }}</div>{% endif %}
+
+    <form hx-post="{% url 'approvals:act' item.pk %}" hx-target="#approval-{{ item.pk }}" hx-swap="outerHTML" class="space-y-2">
+      <textarea name="remarks" rows="2" class="textarea textarea-sm w-full" placeholder="Remarks (needed to return or reject)"
+                title="Your remarks are shown to the submitter">{{ remarks|default:"" }}</textarea>
+      <div class="flex flex-wrap gap-2 justify-end">
+        <button name="action" value="reject" class="btn btn-sm btn-error btn-outline" title="Final no. The record cannot be submitted again."
+                hx-confirm="Reject this? It cannot be submitted again.">Reject</button>
+        <button name="action" value="return" class="btn btn-sm btn-warning btn-outline" title="Send back so the submitter can change it and submit again">Return</button>
+        <button name="action" value="approve" class="btn btn-sm btn-success" title="Approve and move to the next step">Approve</button>
+      </div>
+    </form>
+  </div>
+</section>

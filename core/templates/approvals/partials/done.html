@@ -1,0 +1,8 @@
+<section class="card bg-base-100 shadow-sm" id="approval-{{ item.pk }}">
+  <div class="card-body">
+    <div role="status" class="alert alert-success alert-soft">
+      <span><strong>{{ done_text }}:</strong> {{ item.record|default:"Deleted record" }}.
+      {% if item.status == "submitted" %}Sent to the next step ({{ item.step_name }}).{% else %}{{ item.submitted_by }} has been told.{% endif %}</span>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}My approvals{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">My approvals</h1>
+<p class="text-base-content/70 mb-6">Records waiting for you. Remarks are needed to return or reject.</p>
+
+{% if items %}
+  <div class="grid gap-4 lg:grid-cols-2" id="approvals">
+    {% for item in items %}
+      {% include "approvals/partials/card.html" %}
+    {% endfor %}
+  </div>
+{% else %}
+  <div role="alert" class="alert alert-success alert-soft">Nothing is waiting for you. Well done!</div>
+{% endif %}
+{% endblock %}

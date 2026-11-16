@@ -292,7 +292,8 @@ def test_normal_page_costs_one_role_query_for_2fa_and_sidebar(client, django_ass
     )
     client.force_login(user)
 
-    with django_assert_max_num_queries(8) as captured:
+    # session, user, roles, 4 Masters widget counts, bell count, approvals count
+    with django_assert_max_num_queries(9) as captured:
         client.get("/")
 
     role_queries = [q for q in captured.captured_queries if "accounts_companyrole" in q["sql"]

@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "core.audit",
     "core.files",
     "core.notifications",
+    "core.approvals",
 ]
 
 MIDDLEWARE = [
@@ -72,6 +73,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.app_menu",
                 "core.notifications.context_processors.unread_notifications",
+                "core.approvals.context_processors.waiting_approvals",
             ],
         },
     },

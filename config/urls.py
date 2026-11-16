@@ -9,5 +9,6 @@ urlpatterns = [
     path("history/", include("core.audit.urls")),
     path("files/", include("core.files.urls")),
     path("notifications/", include("core.notifications.urls")),
+    path("approvals/", include("core.approvals.urls")),
     path("", include("core.urls")),
 ]

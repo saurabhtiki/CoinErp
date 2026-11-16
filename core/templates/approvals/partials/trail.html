@@ -1,0 +1,16 @@
+{% if trail %}
+  <ul class="timeline timeline-vertical timeline-compact text-sm">
+    {% for action in trail %}
+      <li>
+        {% if not forloop.first %}<hr>{% endif %}
+        <div class="timeline-middle"><span class="status {% if action.kind == 'approve' %}status-success{% elif action.kind == 'reject' %}status-error{% elif action.kind == 'return' %}status-warning{% else %}status-neutral{% endif %}"></span></div>
+        <div class="timeline-end pb-2">
+          <span class="font-semibold">{{ action.get_kind_display }}</span>{% if action.step_name %} ({{ action.step_name }}){% endif %}
+          by {{ action.user }} · <span class="text-base-content/70">{{ action.created_at|date:"d-m-Y H:i" }}</span>
+          {% if action.remarks %}<div class="text-base-content/80">“{{ action.remarks }}”</div>{% endif %}
+        </div>
+        {% if not forloop.last %}<hr>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}

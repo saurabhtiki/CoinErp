@@ -105,7 +105,40 @@ def visible_rows(queryset, user):
     if user.is_superuser:
         return queryset
     all_rows, own_rows = app_access_by_company(user, queryset.model.access_app_code())
-    return queryset.filter(Q(company_id__in=all_rows) | Q(company_id__in=own_rows, created_by=user))
+    return queryset.filter(
+        Q(company_id__in=all_rows)
+        | Q(company_id__in=own_rows, created_by=user)
+        | Q(pk__in=_waiting_for_approval(user, queryset.model))  # approvers see what waits for them
+    )
+
+
+def _waiting_for_approval(user, model):
+    """Ids of this model's records waiting for this user's approval (a subquery, not a separate query)."""
+    ApprovalRequest = apps.get_model("approvals", "ApprovalRequest")
+    return ApprovalRequest.objects.filter(
+        status="submitted",
+        current_approvers=user,
+        content_type__app_label=model._meta.app_label,
+        content_type__model=model._meta.model_name,
+    ).values("object_id")
+
+
+def can_act_on_approval(user, approval_request):
+    """Only a current approver of a request that is still waiting may approve, return or reject it."""
+    return (
+        _is_usable(user)
+        and approval_request.status == "submitted"
+        and approval_request.current_approvers.filter(pk=user.pk).exists()
+    )
+
+
+def record_is_locked(record):
+    """Records that go through approvals cannot be changed while waiting or once approved."""
+    if record is None or record.pk is None or not getattr(record, "uses_approvals", False):
+        return False
+    from core.approvals.services import is_locked
+
+    return is_locked(record)
 
 
 def roles_require_2fa(user):

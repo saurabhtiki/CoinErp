@@ -1,0 +1,29 @@
+<section id="approval-panel" class="card bg-base-100 shadow-sm" hx-target="this" hx-swap="outerHTML">
+  <div class="card-body gap-3">
+    <div class="flex items-center gap-2">
+      <h2 class="card-title flex-1">Approval</h2>
+      {% if status == "draft" %}<span class="badge badge-ghost">Draft</span>
+      {% elif status == "submitted" %}<span class="badge badge-info badge-soft" title="Step: {{ latest.step_name }}">Waiting: {{ latest.step_name }}</span>
+      {% elif status == "approved" %}<span class="badge badge-success badge-soft">Approved</span>
+      {% elif status == "returned" %}<span class="badge badge-warning badge-soft">Returned for changes</span>
+      {% elif status == "rejected" %}<span class="badge badge-error badge-soft">Rejected</span>{% endif %}
+    </div>
+
+    {% if error %}<div role="alert" class="alert alert-error alert-soft text-sm">{{ error }}</div>{% endif %}
+
+    {% include "approvals/partials/trail.html" %}
+
+    {% if can_submit %}
+      <form hx-post="{{ panel_url }}" class="space-y-2">
+        <input type="hidden" name="action" value="submit">
+        <textarea name="remarks" rows="2" class="textarea textarea-sm w-full" placeholder="Remarks for the approver (optional)" title="Shown to the approvers"></textarea>
+        <div class="text-right"><button class="btn btn-primary btn-sm" title="Send this record for approval. It cannot be changed while it waits.">Submit for approval</button></div>
+      </form>
+    {% elif can_withdraw %}
+      <form hx-post="{{ panel_url }}" class="text-right">
+        <input type="hidden" name="action" value="withdraw">
+        <button class="btn btn-ghost btn-sm" title="Take it back to change it" hx-confirm="Withdraw this request?">Withdraw</button>
+      </form>
+    {% endif %}
+  </div>
+</section>

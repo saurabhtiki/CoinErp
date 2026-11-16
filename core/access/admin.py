@@ -55,6 +55,12 @@ class AppAccessAdminMixin:
 class AccessModelAdmin(AppAccessAdminMixin, HistoryAdmin):
     """Use for every model built on BaseModel."""
 
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj) and not services.record_is_locked(obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and not services.record_is_locked(obj)
+
     readonly_fields = ("created_by", "created_at", "updated_at")
 
     def get_queryset(self, request):
