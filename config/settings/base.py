@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "core.files",
     "core.notifications",
     "core.approvals",
+    "core.reports",
 ]
 
 MIDDLEWARE = [

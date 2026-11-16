@@ -26,6 +26,15 @@ def validate_photo_size(file):
         raise ValidationError("Photo must be 2 MB or smaller.")
 
 
+LOGO_EXTENSIONS = FileExtensionValidator(["jpg", "jpeg", "png"], "Logo must be a JPG or PNG file.")
+MAX_LOGO_BYTES = 1024 * 1024
+
+
+def validate_logo_size(file):
+    if file.size > MAX_LOGO_BYTES:
+        raise ValidationError("Logo must be 1 MB or smaller.")
+
+
 class UpperCaseCharField(models.CharField):
     """Text saved in capitals without outer spaces, so 'abcde1234f ' becomes 'ABCDE1234F'."""
 

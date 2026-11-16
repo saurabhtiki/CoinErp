@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<style>
+  @page {
+    size: A4 {% if report.headings|length > 5 %}landscape{% else %}portrait{% endif %};
+    margin: 12mm 10mm 16mm;
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; }
+  }
+  @media print { body { background: white; } thead { display: table-header-group; } }
+</style>
+
+<div class="flex flex-wrap gap-2 justify-end mb-4 print:hidden">
+  <a href="javascript:history.back()" class="btn btn-ghost btn-sm" title="Go back to the list">Back</a>
+  <button type="button" onclick="window.print()" class="btn btn-primary btn-sm" title='Print, or choose "Save as PDF" to get a PDF'>Print or save as PDF</button>
+</div>
+
+<article id="report" class="bg-base-100 p-6 rounded-box shadow-sm print:shadow-none print:p-0 print:rounded-none">
+  <header class="flex items-start gap-4 border-b border-base-300 pb-3 mb-4">
+    {% if report.logo_data_url %}<img src="{{ report.logo_data_url }}" alt="{{ report.company_name }} logo" class="h-14 w-auto">{% endif %}
+    <div>
+      <p class="text-lg font-bold">{{ report.company_name }}</p>
+      {% for line in report.company_lines %}<p class="text-xs text-base-content/70">{{ line }}</p>{% endfor %}
+    </div>
+  </header>
+
+  <h1 class="text-xl font-bold mb-3">{{ report.title }}</h1>
+
+  {% if rows %}
+    <table class="table table-xs w-full">
+      <thead><tr>{% for heading in report.headings %}<th>{{ heading }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in rows %}<tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+    {% if report.is_cut %}<p class="text-sm mt-2">Showing the first {{ rows|length }} of {{ report.total_rows }} rows. Use Excel for all.</p>{% endif %}
+  {% else %}
+    <p class="text-base-content/70">No rows match.</p>
+  {% endif %}
+
+  <footer class="mt-4 pt-2 border-t border-base-300 text-xs text-base-content/70">{{ report.footer_text }}</footer>
+</article>
+{% endblock %}

@@ -10,6 +10,7 @@ from core.files.validators import validate_file_content
 from .fields import (
     CIN_VALIDATOR,
     IFSC_VALIDATOR,
+    LOGO_EXTENSIONS,
     MOBILE_VALIDATOR,
     PHOTO_EXTENSIONS,
     TAN_VALIDATOR,
@@ -17,6 +18,7 @@ from .fields import (
     check_gstn_matches_pan,
     gstn_field,
     pan_field,
+    validate_logo_size,
     validate_photo_size,
 )
 
@@ -31,6 +33,12 @@ class Company(models.Model):
     tan = UpperCaseCharField("TAN", max_length=10, blank=True, validators=[TAN_VALIDATOR])
     gstn = gstn_field()
     cin = UpperCaseCharField("CIN", max_length=21, blank=True, validators=[CIN_VALIDATOR])
+    logo = models.FileField(
+        upload_to="companies/logos/",
+        blank=True,
+        validators=[LOGO_EXTENSIONS, validate_logo_size, validate_file_content],
+        help_text="JPG or PNG, up to 1 MB. Shown on reports.",
+    )
     is_active = models.BooleanField(default=True)
 
     history = HistoricalRecords()

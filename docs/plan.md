@@ -1,4 +1,4 @@
-# Plan: Phase 2 — Core services (confirmed 2026-11-16)
+# Plan: Phase 2 — Core services (confirmed 2026-11-16; Steps 6–10 built)
 
 Goal: the shared services every app will use: history, files, notifications, approvals, reports.
 No business app yet (Tasks comes in Phase 3). Phase 1 plan: `docs/phase1-plan.md`.
@@ -91,6 +91,11 @@ Services are tested on a test-only demo app (`tests/`), so nothing fake shows in
 - HTML report hides sidebar and buttons when printing; Ctrl+P → "Save as PDF" gives a PDF.
 - PDF files from the server: later (WeasyPrint postponed).
 - Tests: Excel/Word files open and contain header + rows; HTML page shows header; only visible rows exported.
+- Built: `core/reports/services.py` (`make_report` -> `to_excel`, `to_docx`, `report_response` for xlsx/docx/print;
+  Indian number format; hidden columns left out; Word/print stop at 2000 rows, Excel has all). Logo in Word and
+  print (embedded, so no extra download); Excel shows name/address/GSTN only (a logo there would need Pillow).
+  Master lists have Excel / Word / Print links that keep the current search, filters and sort.
+  `Company.logo` added (JPG/PNG, 1 MB, content check, served through the checked files view).
 
 ---
 

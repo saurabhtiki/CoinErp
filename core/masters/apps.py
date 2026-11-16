@@ -10,10 +10,11 @@ class MastersConfig(AppConfig):
         from core.files.services import protect_file_field
         from core.registry import AppEntry, register
 
-        from .models import Employee
+        from .models import Company, Employee
         from .services import dashboard_counts
 
         protect_file_field(Employee, "profile_photo")  # photo opens only for users who may see the employee
+        protect_file_field(Company, "logo")
 
         register(
             AppEntry(

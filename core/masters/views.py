@@ -7,6 +7,7 @@ from django_datatable import CHOICE, Column, DataTable, table_response
 
 from core.access import services
 from core.access.mixins import AppAccessRequiredMixin
+from core.reports import services as reports
 
 from .models import Branch, Company, CostCentre, Customer, Department, Employee, Vendor
 
@@ -83,6 +84,21 @@ MASTER_LISTS = {
 }
 
 
+def _column_getter(column):
+    """Field name, or a function that turns a stored value into its label (e.g. True -> "Yes")."""
+    if not column.choices:
+        return column.name
+    return lambda row: column.choices.get(getattr(row, column.name), getattr(row, column.name))
+
+
+def master_report(user, config, rows):
+    """The list as a report, with the filters and sort the user picked. One company: its header; else group."""
+    companies = services.companies_for_app(user, "masters")
+    company = companies.first() if companies.count() == 1 else None
+    columns = [(column.label, _column_getter(column)) for column in config.columns]
+    return reports.make_report(user, config.title, columns, rows, company=company, model=config.model)
+
+
 class MasterListView(AppAccessRequiredMixin, View):
     """One list screen for every master. Example: /masters/branches/."""
 
@@ -102,8 +118,15 @@ class MasterListView(AppAccessRequiredMixin, View):
             search_fields=config.search_fields,
             noun=config.title.lower(),
         )
+        kind = request.GET.get("report")
+        if kind in reports.KINDS:
+            return reports.report_response(request, master_report(request.user, config, table.ordered), kind)
         context = {
             "table": table,
+            "report_links": [
+                (label, request.path + table.url(drop={"page"}, add=[("report", kind)]))
+                for kind, label in reports.KINDS.items()
+            ],
             "title": config.title,
             "master_lists": MASTER_LISTS,
             "change_url_name": f"admin:masters_{config.model._meta.model_name}_change",

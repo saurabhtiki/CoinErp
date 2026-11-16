@@ -1,1 +1,6 @@
+<div class="flex flex-wrap justify-end gap-2 mb-2" id="report-links"{% if request.htmx %} hx-swap-oob="true"{% endif %}>
+  {% for label, url in report_links %}
+    <a href="{{ url }}" class="btn btn-outline btn-xs" hx-boost="false"{% if label == "Print" %} title="A printable page (use Save as PDF for a PDF), with the rows you filtered"{% else %} title="Download as {{ label }}, with the rows you filtered"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</div>
 {% include "django_datatable/list_table.html" with row_template="masters/partials/row.html" empty_text="Nothing here yet. Records you add will show here." actions_heading=True %}
