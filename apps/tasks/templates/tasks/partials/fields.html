@@ -1,9 +1,9 @@
-{# The task fields in two columns. Needs `form`. #}
+{# The task fields in two columns. Needs `form`. Optional `skip`: a field shown somewhere else (e.g. "comment"). #}
 {% if form.non_field_errors %}
 <div role="alert" class="alert alert-error alert-soft text-sm mb-2">{% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}</div>
 {% endif %}
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-  {% for field in form %}
+  {% for field in form %}{% if field.name != skip %}
   <fieldset class="fieldset{% if field.name in 'title collaborators description comment' %} sm:col-span-2{% endif %}">
     <legend class="fieldset-legend"{% if field.help_text %} title="{{ field.help_text }}"{% endif %}>{{ field.label }}</legend>
     {% if field.name == "collaborators" %}
@@ -14,5 +14,5 @@
     {% for error in field.errors %}<p class="label text-error whitespace-normal">{{ error }}</p>{% endfor %}
     {% if field.help_text %}<p class="label whitespace-normal">{{ field.help_text }}</p>{% endif %}
   </fieldset>
-  {% endfor %}
+  {% endif %}{% endfor %}
 </div>

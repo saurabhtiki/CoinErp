@@ -1,24 +1,114 @@
 {% if not as_page %}<a href="{{ close_url }}" class="fixed inset-0 z-40 bg-black/40" aria-label="Close without saving" title="Close without saving"></a>{% endif %}
+{{ parts.action_rows|json_script:"new-task-actions" }}
+{{ parts.link_rows|json_script:"new-task-links" }}
 <aside class="{% if as_page %}card bg-base-100 shadow-sm max-w-3xl p-5{% else %}fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto bg-base-100 shadow-xl p-5{% endif %}"
-       hx-target="#task-panel" hx-swap="innerHTML">
+       hx-target="#task-panel" hx-swap="innerHTML"
+       x-data="{
+         tab: '{{ tab }}',
+         nextKey: 1,
+         actions: [],
+         links: [],
+         fileCount: 0,
+         init() {
+           this.actions = JSON.parse(document.getElementById('new-task-actions').textContent).map(row => ({ ...row, key: this.nextKey++ }));
+           this.links = JSON.parse(document.getElementById('new-task-links').textContent).map(row => ({ ...row, key: this.nextKey++ }));
+         },
+         addAction() {
+           const form = this.$root.querySelector('form');
+           this.actions.push({ key: this.nextKey++, title: '', owner: form.owner.value, due_date: form.due_date.value });
+         },
+       }">
   <div class="flex items-center gap-2 mb-2">
     <h2 class="text-lg font-bold flex-1">New task</h2>
     <a href="{{ close_url }}" class="btn btn-ghost btn-sm" title="Close without saving">Close</a>
   </div>
-  <form hx-post="{% url 'tasks:new' %}">
-    {% if companies %}
+  {# novalidate: a required field on a hidden tab would block the browser silently; the server shows the error and its tab instead #}
+  <form hx-post="{% url 'tasks:new' %}" hx-encoding="multipart/form-data" novalidate>
+    <div role="tablist" class="tabs tabs-border mb-3">
+      <button type="button" role="tab" class="tab" :class="tab === 'details' && 'tab-active'" @click="tab = 'details'" title="Title, owner, due date and the other task fields">
+        Details{% if tab_errors.details %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+      </button>
+      <button type="button" role="tab" class="tab" :class="tab === 'actions' && 'tab-active'" @click="tab = 'actions'" title="Small steps inside this task, each with its own person and due date">
+        Actions (<span x-text="actions.length">{{ parts.action_rows|length }}</span>){% if tab_errors.actions %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+      </button>
+      <button type="button" role="tab" class="tab" :class="tab === 'files' && 'tab-active'" @click="tab = 'files'" title="Files to upload and web links to keep with the task">
+        Files &amp; links (<span x-text="fileCount + links.length">{{ parts.link_rows|length }}</span>){% if tab_errors.files %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+      </button>
+      <button type="button" role="tab" class="tab" :class="tab === 'comment' && 'tab-active'" @click="tab = 'comment'" title="A first note for the people on this task">
+        Comment{% if tab_errors.comment %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+      </button>
+    </div>
+
+    <div x-show="tab === 'details'">
+      {% if companies %}
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Company</legend>
+          <select name="company" class="select select-sm w-full" hx-get="{% url 'tasks:new' %}" hx-include="closest form"
+                  title="The task and its people belong to this company">
+            {% for item in companies %}<option value="{{ item.pk }}"{% if item.pk == company.pk %} selected{% endif %}>{{ item }}</option>{% endfor %}
+          </select>
+        </fieldset>
+      {% else %}
+        <input type="hidden" name="company" value="{{ company.pk }}">
+      {% endif %}
+      {% include "tasks/partials/fields.html" with skip="comment" %}
+      <p class="text-sm text-base-content/70 my-2">This is a one-time task. For work that comes back every month or year, use Repeating tasks.</p>
+    </div>
+
+    <div x-show="tab === 'actions'" x-cloak>
+      {% for error in parts.errors.actions %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+      <p class="text-sm text-base-content/70 mb-2" x-show="!actions.length">No actions yet. Add the small steps of this task, e.g. "Send data to CA".</p>
+      <template x-for="(row, index) in actions" :key="row.key">
+        <div class="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_9rem_9rem_auto] gap-2 mb-2 items-center">
+          <input name="action_title" x-model="row.title" maxlength="200" class="input input-sm w-full col-span-1"
+                 placeholder="What has to be done" :aria-label="'Action ' + (index + 1)" title="What has to be done">
+          <button type="button" class="btn btn-ghost btn-xs text-error sm:order-last" @click="actions.splice(index, 1)"
+                  title="Remove this action" :aria-label="'Remove action ' + (index + 1)">✕</button>
+          <select name="action_owner" x-model="row.owner" class="select select-sm w-full" title="Who does this action">
+            {% for person in people %}<option value="{{ person.pk }}">{{ person.get_full_name|default:person.email }}</option>{% endfor %}
+          </select>
+          <input type="date" name="action_due_date" x-model="row.due_date" class="input input-sm w-full"
+                 title="When this action is due. It can't be after the task's due date.">
+        </div>
+      </template>
+      <button type="button" class="btn btn-sm" @click="addAction()" title="Add a small step. It starts with the task's owner and due date.">+ Add action</button>
+    </div>
+
+    <div x-show="tab === 'files'" x-cloak>
+      {% for error in parts.errors.files %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+      {% if files_lost %}<div role="alert" class="alert alert-warning alert-soft text-sm mb-2">Files are not kept when the form has an error. Please choose them again.</div>{% endif %}
       <fieldset class="fieldset">
-        <legend class="fieldset-legend">Company</legend>
-        <select name="company" class="select select-sm w-full" hx-get="{% url 'tasks:new' %}" hx-include="closest form"
-                title="The task and its people belong to this company">
-          {% for item in companies %}<option value="{{ item.pk }}"{% if item.pk == company.pk %} selected{% endif %}>{{ item }}</option>{% endfor %}
-        </select>
+        <legend class="fieldset-legend">Files</legend>
+        <input type="file" name="files" multiple class="file-input file-input-sm w-full" @change="fileCount = $event.target.files.length"
+               accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx,.csv" title="PDF, JPG, PNG, Excel, Word or CSV, up to 10 MB each">
+        <p class="label whitespace-normal">PDF, JPG, PNG, Excel, Word or CSV, up to 10 MB each. You can choose several.</p>
       </fieldset>
-    {% else %}
-      <input type="hidden" name="company" value="{{ company.pk }}">
-    {% endif %}
-    {% include "tasks/partials/fields.html" %}
-    <p class="text-sm text-base-content/70 my-2">This is a one-time task. Actions and files can be added after you create it.</p>
-    <button class="btn btn-primary btn-sm" title="Save the task and tell the owner">Create task</button>
+      <h3 class="font-medium mt-3 mb-1">Links</h3>
+      {% for error in parts.errors.links %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+      <template x-for="(row, index) in links" :key="row.key">
+        <div class="grid grid-cols-[1fr_auto] sm:grid-cols-[10rem_1fr_auto] gap-2 mb-2 items-center">
+          <input name="link_label" x-model="row.label" maxlength="200" class="input input-sm w-full"
+                 placeholder="Name, e.g. GST sheet" title="A short name for the link">
+          <button type="button" class="btn btn-ghost btn-xs text-error sm:order-last" @click="links.splice(index, 1)"
+                  title="Remove this link" :aria-label="'Remove link ' + (index + 1)">✕</button>
+          <input type="url" name="link_url" x-model="row.url" maxlength="500" class="input input-sm w-full col-span-2 sm:col-span-1"
+                 placeholder="https://…" title="The web address, e.g. a Google Drive file">
+        </div>
+      </template>
+      <button type="button" class="btn btn-sm" @click="links.push({ key: nextKey++, label: '', url: '' })" title="Add a web link, e.g. a Google Drive file">+ Add link</button>
+    </div>
+
+    <div x-show="tab === 'comment'" x-cloak>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">{{ form.comment.label }}</legend>
+        {{ form.comment }}
+        {% for error in form.comment.errors %}<p class="label text-error whitespace-normal">{{ error }}</p>{% endfor %}
+        <p class="label whitespace-normal">Example: "Use last year's file as a sample."</p>
+      </fieldset>
+    </div>
+
+    <div class="mt-4">
+      <button class="btn btn-primary btn-sm" title="Save the task with its actions, files, links and comment, and tell the people on it">Create task</button>
+    </div>
   </form>
 </aside>

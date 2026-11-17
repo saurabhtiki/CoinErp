@@ -17,7 +17,7 @@ from core.access.services import companies_for_app
 from core.files import services as files
 
 from . import services
-from .forms import ActionForm, TaskForm, task_initial
+from .forms import ActionForm, NewTaskParts, TaskForm, task_initial
 from .models import Task, TaskAction, TaskLink
 from .schedule import WEEKDAYS, describe
 
@@ -256,11 +256,29 @@ class TaskDetailView(TasksView):
         return panel(request, task, form=form)
 
 
+NEW_TABS = ("details", "actions", "files", "comment")
+
+
+def new_tab_errors(form, parts):
+    """Which tabs of the New task form have an error (they get a red dot). Example: {"actions": True, ...}."""
+    return {
+        "details": any(name != "comment" for name in form.errors),
+        "actions": "actions" in parts.errors,
+        "files": "links" in parts.errors or "files" in parts.errors,
+        "comment": "comment" in form.errors,
+    }
+
+
 class TaskNewView(TasksView):
-    def render(self, request, form, company, companies):
+    def render(self, request, form, company, companies, parts=None):
+        parts = parts or NewTaskParts(company=company)
+        tab_errors = new_tab_errors(form, parts)
         context = {
             "form": form, "company": company, "companies": companies if companies.count() > 1 else [],
             "close_url": close_url(request), "as_page": shown_as_page(request),
+            "parts": parts, "people": services.people_of(company), "tab_errors": tab_errors,
+            "tab": next((tab for tab in NEW_TABS if tab_errors[tab]), "details"),
+            "files_lost": bool(parts.files) and any(tab_errors.values()),
         }
         template = "tasks/partials/new.html" if request.htmx else "tasks/new.html"
         return render(request, template, context)
@@ -275,12 +293,18 @@ class TaskNewView(TasksView):
     def post(self, request):
         company, companies = self.company(request)
         form = TaskForm(request.POST, company=company, is_new=True)
-        if form.is_valid():
+        parts = NewTaskParts(request.POST, request.FILES, company=company)
+        form_ok = form.is_valid()
+        if parts.is_valid(form.cleaned_data.get("due_date")) and form_ok:  # both checked: every tab shows its errors
             data = dict(form.cleaned_data)
             try:
-                task = services.create_task(request.user, company, first_comment=data.pop("comment"), **data)
+                task = services.create_task(
+                    request.user, company, first_comment=data.pop("comment"),
+                    actions=parts.actions, links=parts.links, files=parts.files, **data,
+                )
             except ValidationError as error:
-                form.add_service_errors(error)
+                if rest := parts.take_service_errors(error):
+                    form.add_service_errors(rest)
             else:
                 if not request.htmx:
                     return redirect("tasks:detail", pk=task.pk)
@@ -288,7 +312,7 @@ class TaskNewView(TasksView):
                 if shown_as_page(request):
                     response["HX-Push-Url"] = reverse("tasks:detail", args=[task.pk])
                 return response
-        return self.render(request, form, company, companies)
+        return self.render(request, form, company, companies, parts)
 
 
 class TaskDoneView(TasksView):

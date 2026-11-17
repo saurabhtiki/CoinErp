@@ -1,6 +1,8 @@
 import calendar
+from datetime import date
 
 from django import forms
+from django.core.exceptions import ValidationError
 
 from core.masters.models import Company
 
@@ -74,6 +76,66 @@ class TaskForm(forms.Form):
         else:
             for message in error.messages:
                 self.add_error(None, message)
+
+
+def posted_rows(data, prefix, names, filled):
+    """Rows added in the browser, sent as lists. A row whose `filled` fields are all blank is skipped.
+
+    Example: action_title=["Send data", ""], action_owner=["5", "5"] -> [{"title": "Send data", "owner": "5"}]
+    """
+    columns = [data.getlist(f"{prefix}_{name}") for name in names]
+    rows = [dict(zip(names, values)) for values in zip(*columns)]
+    return [row for row in rows if any(row[name].strip() for name in filled)]
+
+
+class NewTaskParts:
+    """The Actions and Files & links tabs of the New task form. The service checks the rules;
+    this only turns the posted text into people and dates."""
+
+    TABS = ("actions", "links", "files")
+
+    def __init__(self, data=None, files=None, *, company):
+        self.company = company
+        self.action_rows = posted_rows(data, "action", ("title", "owner", "due_date"), ("title",)) if data else []
+        self.link_rows = posted_rows(data, "link", ("label", "url"), ("label", "url")) if data else []
+        self.files = files.getlist("files") if files else []
+        self.errors = {}
+        self.actions, self.links = [], [dict(row) for row in self.link_rows]
+
+    def is_valid(self, due_date=None):
+        """Check every row now, so all tabs show their errors together. `due_date`: the task's, if valid."""
+        people = {str(person.pk): person for person in services.people_of(self.company)}
+        problems = []
+        for number, row in enumerate(self.action_rows, 1):
+            owner = people.get(row["owner"])
+            try:
+                due_date = date.fromisoformat(row["due_date"])
+            except ValueError:
+                due_date = None
+            if owner is None:
+                problems.append(f"Action {number}: pick who does it.")
+            if due_date is None:
+                problems.append(f"Action {number}: pick a due date.")
+            if owner and due_date:
+                self.actions.append({"title": row["title"], "owner": owner, "due_date": due_date})
+        if problems:
+            self.errors["actions"] = problems
+        found = services.task_part_problems(self.company, due_date, self.actions, self.links, self.files)
+        for tab, messages in found.items():
+            self.errors.setdefault(tab, []).extend(messages)
+        return not self.errors
+
+    def take_service_errors(self, error):
+        """Keep this part's messages (actions, links, files); return the rest for the main form, or None."""
+        if not hasattr(error, "error_dict"):
+            return error
+        rest = {}
+        for field, messages in error.message_dict.items():
+            if field in self.TABS:
+                self.errors.setdefault(field, []).extend(messages)
+            else:
+                rest[field] = messages
+        return ValidationError(rest) if rest else None
 
 
 def task_initial(task):

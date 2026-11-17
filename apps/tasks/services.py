@@ -29,6 +29,8 @@ from core.access.services import (
     team_rows,
     users_for_app,
 )
+from core.files.services import attach
+from core.files.validators import validate_attachment
 from core.masters.models import Company
 from core.notifications.models import NotificationLog
 from core.notifications.services import notify
@@ -333,23 +335,81 @@ def _new_task(company, created_by, collaborators, **fields):
     return task
 
 
+def _check_action_due(action_due, task_due):
+    """An action is a step of its task, so it can't be due after the task. Returns the message, or ""."""
+    if action_due > task_due:
+        return f"Action due date can't be after the task's due date ({_day(task_due)})."
+    return ""
+
+
+def task_part_problems(company, due_date, actions, links, files):
+    """Check the rows of the New task tabs before anything is saved. Returns {"actions": [...], ...}.
+    due_date None (not filled in yet): the "not after the task" check waits until it is.
+
+    Example: {"actions": ["Action 2: Action due date can't be after the task's due date (20 Nov 2026)."]}
+    """
+    people = set(people_of(company).values_list("pk", flat=True))
+    problems = {"actions": [], "links": [], "files": []}
+    for number, action in enumerate(actions, 1):
+        if not action["title"].strip():
+            problems["actions"].append(f"Action {number}: write what has to be done.")
+        if action["owner"].pk not in people:
+            problems["actions"].append(f"Action {number}: pick someone who works in {company} and can open Tasks.")
+        if due_date and (late := _check_action_due(action["due_date"], due_date)):
+            problems["actions"].append(f"Action {number}: {late}")
+    for number, link in enumerate(links, 1):
+        try:
+            TaskLink(label=link["label"].strip() or link["url"].strip(), url=link["url"].strip()).full_clean(exclude=["task"])
+        except ValidationError as error:
+            problems["links"].extend(f"Link {number}: {message}" for message in error.messages)
+    for uploaded in files:
+        try:
+            validate_attachment(uploaded)
+        except ValidationError as error:
+            problems["files"].extend(f"{uploaded.name}: {message}" for message in error.messages)
+    return {tab: messages for tab, messages in problems.items() if messages}
+
+
 @transaction.atomic
 def create_task(user, company, *, title, owner, due_date, category=None, priority=Task.Priority.MEDIUM,
-                reviewer=None, collaborators=(), description="", first_comment=""):
+                reviewer=None, collaborators=(), description="", first_comment="", actions=(), links=(), files=()):
+    """Save a new task with everything from the New task tabs, all or nothing.
+
+    actions: [{"title": "Send data to CA", "owner": amar, "due_date": date(2026, 11, 18)}]
+    links:   [{"label": "GST sheet", "url": "https://..."}]
+    files:   uploaded files (checked like any upload: type, size, real content)
+    """
     collaborators = [person for person in collaborators if person.pk != owner.pk]
     _check_people(company, owner=owner, reviewer=reviewer, collaborators=collaborators)
     if category is not None and category.company_id != company.pk:
         _refuse({"category": f"Pick a category of {company}."})
+    if problems := task_part_problems(company, due_date, actions, links, files):
+        _refuse(problems)
     task = _new_task(
         company, user, collaborators, title=title, description=description, owner=owner, reviewer=reviewer,
         category=category, priority=priority, due_date=due_date,
     )
+    TaskAction.objects.bulk_create(
+        TaskAction(task=task, created_by=user, title=action["title"].strip(), owner=action["owner"],
+                   due_date=action["due_date"])
+        for action in actions
+    )
+    TaskLink.objects.bulk_create(
+        TaskLink(task=task, created_by=user, label=link["label"].strip() or link["url"].strip(), url=link["url"].strip())
+        for link in links
+    )
     if first_comment.strip():
         TaskComment.objects.create(task=task, created_by=user, text=first_comment.strip())
+    for uploaded in files:  # last: the files are already checked, and a file on disk can't be rolled back
+        attach(task, uploaded, user)
     due = _day(due_date)
     _tell([owner], user, task, f"New task for you: {task.title}", f"{task.code}, due {due}.")
     _tell([reviewer], user, task, f"You are the reviewer: {task.title}", f"{task.code}, due {due}.")
     _tell(collaborators, user, task, f"You were added to a task: {task.title}", f"{task.code}, due {due}.")
+    for action in actions:  # the owner already heard about the whole task
+        if action["owner"].pk != owner.pk:
+            _tell([action["owner"]], user, task, f"New action for you: {action['title'].strip()}",
+                  f"In {task.code} {task.title}, due {_day(action['due_date'])}.")
     return task
 
 
@@ -468,6 +528,8 @@ def add_action(user, task, title, owner, due_date):
     if not title.strip():
         _refuse("Write what has to be done.")
     _check_people(task.company, owner=owner)
+    if late := _check_action_due(due_date, task.due_date):
+        _refuse(late)
     action = TaskAction.objects.create(task=task, created_by=user, title=title.strip(), owner=owner, due_date=due_date)
     _tell([owner], user, task, f"New action for you: {action.title}", f"In {task.code} {task.title}, due {_day(due_date)}.")
     return action
