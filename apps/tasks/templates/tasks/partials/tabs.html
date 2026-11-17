@@ -1,6 +1,7 @@
 {# The tabs on top of every Tasks screen. Needs `lists` and `tab` (the open one). #}
 <div role="tablist" class="tabs tabs-box mb-4 overflow-x-auto flex-nowrap">
   <a role="tab" href="{% url 'tasks:dashboard' %}" class="tab whitespace-nowrap{% if tab == 'dashboard' %} tab-active{% endif %}" title="Counts, charts and how each person is doing">Dashboard</a>
+  <a role="tab" href="{% url 'tasks:calendar' %}" class="tab whitespace-nowrap{% if tab == 'calendar' %} tab-active{% endif %}" title="Tasks on a month calendar, by due date">Calendar</a>
   {% for slug, item in lists.items %}
     <a role="tab" href="{% url 'tasks:list' slug %}" class="tab whitespace-nowrap{% if slug == tab %} tab-active{% endif %}" title="{{ item.2 }}">{{ item.0 }}</a>
   {% endfor %}

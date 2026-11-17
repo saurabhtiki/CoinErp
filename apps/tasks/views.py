@@ -1,6 +1,8 @@
 import logging
+from datetime import datetime
 from urllib.parse import urlsplit
 
+from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import F
 from django.http import Http404, HttpResponse
@@ -17,7 +19,7 @@ from core.files import services as files
 from . import services
 from .forms import ActionForm, TaskForm, task_initial
 from .models import Task, TaskAction, TaskLink
-from .schedule import describe
+from .schedule import WEEKDAYS, describe
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,28 @@ class TaskListView(TasksView):
         return table_response(request, table, "tasks/list.html", "tasks/partials/table.html", context)
 
 
+class CalendarView(TasksView):
+    """Tasks on a month grid. Example: /tasks/calendar/?month=2026-11&show=all.
+    Prev / Next / Today swap only the grid (HTMX); the address keeps the month, so Close returns here."""
+
+    def get(self, request):
+        month_text = request.GET.get("month", "")
+        try:
+            month = datetime.strptime(month_text, "%Y-%m").date() if month_text else timezone.localdate().replace(day=1)
+        except ValueError:
+            logger.warning("Calendar: bad month %r from user %s", month_text, request.user.pk)
+            messages.error(request, f"'{month_text}' is not a month like 2026-11. Showing this month instead.")
+            month = timezone.localdate().replace(day=1)
+        show = "mine" if request.GET.get("show") == "mine" else "all"
+        context = {
+            "title": "Calendar", "lists": LISTS, "tab": "calendar", "show": show,
+            "calendar": services.calendar_month(request.user, month.year, month.month, mine=show == "mine"),
+            "weekdays": [name[:3] for name in WEEKDAYS],
+        }
+        template = "tasks/partials/calendar.html" if request.htmx else "tasks/calendar.html"
+        return render(request, template, context)
+
+
 class DashboardView(TasksView):
     """Counts, a per-person table and two charts, all on tasks this user may see. Example: /tasks/dashboard/."""
 
@@ -180,7 +204,7 @@ def list_behind(request):
     """Address of the list the panel was opened over, or "" when the panel is a page of its own."""
     current = request.headers.get("HX-Current-URL", "")
     path = urlsplit(current).path
-    if request.htmx and (path.startswith("/tasks/list/") or path == reverse("tasks:rules")):
+    if request.htmx and (path.startswith("/tasks/list/") or path in (reverse("tasks:rules"), reverse("tasks:calendar"))):
         return current
     return ""
 

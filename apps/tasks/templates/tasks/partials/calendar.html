@@ -1,0 +1,45 @@
+{# The month grid. Prev / Today / Next and Mine / All swap only this block. Needs `calendar`, `show`, `weekdays`. #}
+{% url 'tasks:calendar' as calendar_url %}
+<div id="calendar" hx-target="#calendar" hx-swap="outerHTML" hx-push-url="true">
+  <div class="flex flex-wrap items-center gap-2 mb-3">
+    <div class="join">
+      <a class="btn btn-sm join-item" href="{{ calendar_url }}?month={{ calendar.previous|date:'Y-m' }}&show={{ show }}"
+         hx-get="{{ calendar_url }}?month={{ calendar.previous|date:'Y-m' }}&show={{ show }}" title="Previous month">&larr;</a>
+      <a class="btn btn-sm join-item" href="{{ calendar_url }}?show={{ show }}" hx-get="{{ calendar_url }}?show={{ show }}" title="Go to this month">Today</a>
+      <a class="btn btn-sm join-item" href="{{ calendar_url }}?month={{ calendar.next|date:'Y-m' }}&show={{ show }}"
+         hx-get="{{ calendar_url }}?month={{ calendar.next|date:'Y-m' }}&show={{ show }}" title="Next month">&rarr;</a>
+    </div>
+    <h2 class="text-lg font-semibold flex-1">{{ calendar.month|date:"F Y" }}</h2>
+    <div class="join">
+      <a class="btn btn-sm join-item{% if show == 'mine' %} btn-active btn-primary{% endif %}" href="{{ calendar_url }}?month={{ calendar.month|date:'Y-m' }}&show=mine"
+         hx-get="{{ calendar_url }}?month={{ calendar.month|date:'Y-m' }}&show=mine" title="Only tasks you own, review, help with or have an action in">Mine</a>
+      <a class="btn btn-sm join-item{% if show == 'all' %} btn-active btn-primary{% endif %}" href="{{ calendar_url }}?month={{ calendar.month|date:'Y-m' }}&show=all"
+         hx-get="{{ calendar_url }}?month={{ calendar.month|date:'Y-m' }}&show=all" title="Every task you are allowed to see">All I can see</a>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <div class="grid grid-cols-7 gap-px bg-base-300 border border-base-300 rounded-box overflow-hidden min-w-[48rem]">
+      {% for name in weekdays %}<div class="bg-base-200 text-center text-xs font-semibold py-1">{{ name }}</div>{% endfor %}
+      {% for week in calendar.weeks %}{% for day in week %}
+        <div class="min-h-28 p-1 {% if day.off %}bg-base-200{% else %}bg-base-100{% endif %}{% if not day.in_month %} opacity-50{% endif %}"
+             {% if day.off %}title="Day off{% if day.holidays %}: {{ day.holidays|join:', ' }}{% endif %}"{% elif day.holidays %}title="Holiday in some of your companies: {{ day.holidays|join:', ' }}"{% endif %}>
+          <div class="flex items-center gap-1 mb-1">
+            <span class="text-xs {% if day.is_today %}badge badge-primary badge-sm{% else %}font-medium{% endif %}">{{ day.date.day }}</span>
+            {% if day.holidays %}<span class="text-[0.65rem] text-base-content/70 truncate">{{ day.holidays|join:", " }}</span>{% endif %}
+          </div>
+          <div class="space-y-0.5" x-data="{ open: false }">
+            {% for task in day.tasks %}{% include "tasks/partials/calendar_task.html" %}{% endfor %}
+            {% if day.more %}
+              <template x-if="open"><div class="space-y-0.5">{% for task in day.more %}{% include "tasks/partials/calendar_task.html" %}{% endfor %}</div></template>
+              <button type="button" class="btn btn-ghost btn-xs w-full" x-on:click="open = !open"
+                      title="Show or hide the other tasks of this day"
+                      x-text="open ? 'Show less' : '+{{ day.more|length }} more'">+{{ day.more|length }} more</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}{% endfor %}
+    </div>
+  </div>
+  <p class="text-xs text-base-content/70 mt-2">Grey days are days off (Sunday, off Saturday or holiday). Red tasks are overdue. Click a task to open it.</p>
+</div>

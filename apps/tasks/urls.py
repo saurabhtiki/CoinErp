@@ -8,6 +8,7 @@ app_name = "tasks"
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="tasks:list", permanent=False), {"view": "mine"}),
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
+    path("calendar/", views.CalendarView.as_view(), name="calendar"),
     path("list/<slug:view>/", views.TaskListView.as_view(), name="list"),
     path("new/", views.TaskNewView.as_view(), name="new"),
     path("<int:pk>/", views.TaskDetailView.as_view(), name="detail"),

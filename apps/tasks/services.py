@@ -5,8 +5,9 @@ Example:
     update_task(het, task, {"due_date": date(2026, 11, 25)}, comment="Data came late")  # counter +1
     mark_done(het, task)  # Completed, or Under Review if the task has a reviewer
 """
+import calendar
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 from itertools import takewhile
 
 from django.contrib.auth import get_user_model
@@ -164,6 +165,68 @@ def people_numbers(user, today=None):
             output_field=IntegerField(),
         )
     )
+
+
+# ---------- calendar ----------
+
+CALENDAR_DAY_LIMIT = 3  # tasks shown in a day box before "+N more"
+
+
+def calendar_month(user, year, month, mine=False, today=None):
+    """One month as weeks of days (Monday first), each day with its tasks and whether it is an off day.
+
+    mine=True shows only "My tasks"; otherwise every task the user may see.
+    A day is shaded as off only if it is off in every company where the user works (Sunday, an off
+    Saturday or a holiday); holiday names of any of those companies are shown.
+    Example: calendar_month(het, 2026, 11)["weeks"][2][5] -> {"date": 14 Nov, "off": True, "holidays": [], ...}
+    """
+    today = today or timezone.localdate()
+    weeks = calendar.Calendar(firstweekday=0).monthdatescalendar(year, month)
+    first, last = weeks[0][0], weeks[-1][-1]
+
+    rows = (my_tasks if mine else visible_tasks)(user).filter(due_date__range=(first, last))
+    tasks_by_day = {}
+    for task in rows.order_by("due_date", "status", "number"):
+        task.is_overdue = task.status != Status.COMPLETED and task.due_date < today
+        tasks_by_day.setdefault(task.due_date, []).append(task)
+
+    companies = list(companies_for_app(user, Task.access_app_code()).values_list("pk", flat=True))
+    saturdays = dict(OffDaySetting.objects.filter(company__in=companies).values_list("company_id", "off_saturdays"))
+    holiday_names, holiday_dates = {}, {company_id: set() for company_id in companies}
+    for company_id, day, name in Holiday.objects.filter(company__in=companies, date__range=(first, last)).values_list(
+        "company_id", "date", "name"
+    ):
+        holiday_dates[company_id].add(day)
+        holiday_names.setdefault(day, [])
+        if name not in holiday_names[day]:
+            holiday_names[day].append(name)
+    off_days = [
+        schedule.OffDays(
+            saturdays=frozenset(saturdays.get(company_id) or default_off_saturdays()),
+            holidays=frozenset(holiday_dates[company_id]),
+        )
+        for company_id in companies
+    ] or [schedule.OffDays()]
+
+    def day_box(day):
+        tasks = tasks_by_day.get(day, [])
+        return {
+            "date": day,
+            "in_month": day.month == month,
+            "is_today": day == today,
+            "off": all(company_off.is_off(day) for company_off in off_days),
+            "holidays": holiday_names.get(day, []),
+            "tasks": tasks[:CALENDAR_DAY_LIMIT],
+            "more": tasks[CALENDAR_DAY_LIMIT:],
+        }
+
+    month_start = date(year, month, 1)
+    return {
+        "month": month_start,
+        "previous": schedule.add_months(month_start, -1),
+        "next": schedule.add_months(month_start, 1),
+        "weeks": [[day_box(day) for day in week] for week in weeks],
+    }
 
 
 def people_of(company):

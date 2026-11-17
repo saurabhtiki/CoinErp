@@ -45,7 +45,8 @@ def move_off_day(day, off_day_rule, off_days):
     return day
 
 
-def _add_months(first_day, months):
+def add_months(first_day, months):
+    """First day of the month `months` later. Example: add_months(1 Nov 2026, 2) -> 1 Jan 2027."""
     month_index = first_day.year * 12 + first_day.month - 1 + months
     return date(month_index // 12, month_index % 12 + 1, 1)
 
@@ -78,9 +79,9 @@ def _raw_periods(rule):
             due = monday + timedelta(days=rule.weekday or 0, weeks=(every - 1) + shift)
             yield Period(monday, f"Week of {monday:%d %b %Y}", due)
         elif rule.frequency == "monthly":
-            first = _add_months(start.replace(day=1), count * every)
-            last = _add_months(first, every - 1)
-            yield Period(first, _months_label(first, last), _day_in_month(_add_months(last, shift), rule.due_day))
+            first = add_months(start.replace(day=1), count * every)
+            last = add_months(first, every - 1)
+            yield Period(first, _months_label(first, last), _day_in_month(add_months(last, shift), rule.due_day))
         else:  # yearly
             first = date(start.year + count * every, 1, 1)
             last_year = first.year + every - 1
