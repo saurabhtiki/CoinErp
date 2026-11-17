@@ -71,6 +71,18 @@ DUE_GROUPS = {
 # ---------- reading ----------
 
 
+def due_group(today, *first):
+    """The "When" of a row from its due date: overdue / today / week (next 7 days) / later.
+    `first` adds checks that win, e.g. When(status="completed", then=Value("done")) for tasks."""
+    return Case(
+        *first,
+        When(due_date__lt=today, then=Value("overdue")),
+        When(due_date=today, then=Value("today")),
+        When(due_date__lte=today + timedelta(days=7), then=Value("week")),
+        default=Value("later"),
+    )
+
+
 def visible_tasks(user):
     """Every task the user may see (cancelled ones left out), with what the lists show."""
     today = timezone.localdate()
@@ -78,13 +90,7 @@ def visible_tasks(user):
         Task.objects.for_user(user)
         .filter(is_active=True)
         .annotate(
-            due_group=Case(
-                When(status=Status.COMPLETED, then=Value("done")),
-                When(due_date__lt=today, then=Value("overdue")),
-                When(due_date=today, then=Value("today")),
-                When(due_date__lte=today + timedelta(days=7), then=Value("week")),
-                default=Value("later"),
-            ),
+            due_group=due_group(today, When(status=Status.COMPLETED, then=Value("done"))),
             actions_total=Count("actions", distinct=True),
             actions_done=Count("actions", filter=Q(actions__is_done=True), distinct=True),
         )
@@ -135,26 +141,32 @@ def filter_choices(user):
     }
 
 
-def read_filters(user, params, names=("company", "person", "category", "priority"), choices=None):
-    """The picked filters that are allowed, and a message for each one that is not.
+FILTER_NAMES = ("company", "person", "category", "priority")
+
+
+def read_filters(user, params, choices=None, names=FILTER_NAMES):
+    """The picked filters that are allowed, their labels (for an "Only: ..." note), and a message for each
+    one that is not. The choices are worked out only if a filter is given (or passed in).
+    `names` leaves out a filter the page's own table handles, e.g. Priority on the task list.
 
     Example: ?company=2&person=99 where 99 is not someone whose tasks you see
-             -> ({"company": "2"}, ['The Person filter was ignored: ...'])
+             -> ({"company": "2"}, ["Acme"], ['The Person filter was ignored: ...'])
     """
-    if not any(params.get(name) for name in names):
-        return {}, []
+    given = {name: params.get(name, "").strip() for name in names}
+    if not any(given.values()):
+        return {}, [], []
     choices = choices or filter_choices(user)
-    picked, problems = {}, []
-    for name in names:
-        value = params.get(name, "").strip()
+    picked, labels, problems = {}, [], []
+    for name, value in given.items():
         if not value:
             continue
         if value in dict(choices[name]):
             picked[name] = value
+            labels.append(dict(choices[name])[value])
         else:
             logger.info("Tasks filter %s=%r refused for user %s", name, value, user.pk)
             problems.append(f"The {name.title()} filter was ignored: you can't pick that {name} here.")
-    return picked, problems
+    return picked, labels, problems
 
 
 def filtered(rows, filters, via=""):
@@ -182,15 +194,16 @@ def visible_open_actions(user, today=None):
     today = today or timezone.localdate()
     open_task_ids = Task.objects.for_user(user).filter(is_active=True).exclude(status=Status.COMPLETED).values("pk")
     return TaskAction.objects.filter(task__in=open_task_ids, is_done=False).annotate(
-        due_group=Case(
-            When(due_date__lt=today, then=Value("overdue")),
-            When(due_date=today, then=Value("today")),
-            When(due_date__lte=today + timedelta(days=7), then=Value("week")),
-            default=Value("later"),
-        ),
+        due_group=due_group(today),
         task_title=F("task__title"),
         owner_name=F("owner__first_name"),
     )
+
+
+def team_tasks(user):
+    """Active tasks this user looks after (theirs, their team's, or all in companies where they are admin).
+    The People table counts only these, so its links show only these too (?team=1)."""
+    return team_rows(Task.objects.filter(is_active=True), user)
 
 
 def done_this_month(tasks, today=None):
@@ -206,18 +219,20 @@ def dashboard_numbers(user, today=None, filters=None):
               "by_status": [("blocked", "Blocked", 5), ...], "by_category": [("MIS", "MIS", 3), ...]}
     """
     today = today or timezone.localdate()
+    filters = filters or {}
     # Same rows as visible_tasks(), without the list's extra columns, so the counts group cleanly.
     open_tasks = Task.objects.for_user(user).filter(is_active=True).exclude(status=Status.COMPLETED).order_by()
-    open_tasks = filtered(open_tasks, filters or {})
-    actions = filtered(visible_open_actions(user, today), filters or {}, via="task__").order_by()
-    action_cards = actions.aggregate(
-        overdue=Count("pk", filter=Q(due_date__lt=today)),
-        today=Count("pk", filter=Q(due_date=today)),
-        week=Count("pk", filter=Q(due_date__gt=today, due_date__lte=today + timedelta(days=7))),
-    )
+    open_tasks = filtered(open_tasks, filters)
     # "Mine" is always the user's own actions, whatever the Person filter says.
-    others = {name: value for name, value in (filters or {}).items() if name != "person"}
-    action_cards["mine"] = filtered(visible_open_actions(user, today), others, via="task__").filter(owner=user).count()
+    others = {name: value for name, value in filters.items() if name != "person"}
+    actions = filtered(visible_open_actions(user, today), others, via="task__").order_by()
+    counted = Q(owner_id=filters["person"]) if "person" in filters else Q()
+    action_cards = actions.aggregate(
+        overdue=Count("pk", filter=counted & Q(due_date__lt=today)),
+        today=Count("pk", filter=counted & Q(due_date=today)),
+        week=Count("pk", filter=counted & Q(due_date__gt=today, due_date__lte=today + timedelta(days=7))),
+        mine=Count("pk", filter=Q(owner=user)),
+    )
     cards = open_tasks.aggregate(
         overdue=Count("pk", filter=Q(due_date__lt=today)),
         today=Count("pk", filter=Q(due_date=today)),
@@ -251,8 +266,8 @@ def people_numbers(user, today=None, filters=None):
     today = today or timezone.localdate()
     month_start = today.replace(day=1)
     filters = filters or {}
-    all_team_tasks = team_rows(Task.objects.filter(is_active=True), user)
-    team_tasks = filtered(all_team_tasks, filters)
+    all_team_tasks = team_tasks(user)
+    counted_tasks = filtered(all_team_tasks, filters)
     others = {name: value for name, value in filters.items() if name != "person"}
     action_tasks = filtered(all_team_tasks, others).exclude(status=Status.COMPLETED)
     actions = TaskAction.objects.filter(task__in=action_tasks.values("pk"), is_done=False)
@@ -265,12 +280,12 @@ def people_numbers(user, today=None, filters=None):
             .annotate(total=Count("pk")).values("total")
         ), 0)
 
-    team_task_ids = team_tasks.values("pk")
+    team_task_ids = counted_tasks.values("pk")
     mine = Q(owned_tasks__in=team_task_ids)
     is_open = mine & ~Q(owned_tasks__status=Status.COMPLETED)
     done = mine & Q(owned_tasks__status=Status.COMPLETED, owned_tasks__completed_at__date__gte=month_start)
     on_time = done & Q(owned_tasks__completed_at__date__lte=F("owned_tasks__due_date"))
-    rows = User.objects.filter(Q(pk__in=team_tasks.values("owner")) | Q(pk__in=actions.values("owner"))).annotate(
+    rows = User.objects.filter(Q(pk__in=counted_tasks.values("owner")) | Q(pk__in=actions.values("owner"))).annotate(
         open_actions_count=count_actions(),
         overdue_actions_count=count_actions(Q(due_date__lt=today)),
     ).annotate(

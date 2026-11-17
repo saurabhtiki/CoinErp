@@ -131,3 +131,37 @@ def test_my_open_actions_card_works_even_for_someone_with_no_tasks(client, peopl
 
     assert card["label"] == "My open actions" and card["count"] == 0
     assert "ignored" not in page.content.decode()  # the user is always a person they may pick
+
+
+@pytest.mark.django_db
+def test_people_links_show_only_what_the_people_table_counted(client, people, acme, actions):
+    """Foram also sees a task outside her team (as a collaborator): it is in her lists, not in her People numbers."""
+    foram, amar = people["foram"], people["amar"]
+    side = services.create_task(people["boss"], acme, title="Audit", owner=amar, due_date=day(-1),
+                                collaborators=[foram])
+    services.add_action(people["boss"], side, "Count stock", amar, day(-3))
+    client.force_login(foram)
+    context = client.get("/tasks/dashboard/").context
+    row = next(row for row in context["table"].page if row.pk == amar.pk)
+    links = context["person_urls"]
+
+    def shown(url):
+        return len(client.get(f"{url}&person={amar.pk}").context["table"].page)
+
+    assert (row.open_actions_count, row.overdue_actions_count, row.open_count, row.overdue_count) == (2, 1, 0, 0)
+    assert shown(links["open_actions"]) == 2 and shown(links["overdue_actions"]) == 1
+    assert shown(links["open"]) == 0 and shown(links["overdue"]) == 0
+    assert len(client.get(f"/tasks/actions/?person={amar.pk}").context["table"].page) == 3  # without team=1
+
+
+@pytest.mark.django_db
+def test_task_list_reads_the_same_category_filter_as_the_actions_list(client, people, acme):
+    mis = services.categories_of(acme).get(name="MIS")
+    in_mis = task_for(people, acme, category=mis)
+    task_for(people, acme)
+    client.force_login(people["het"])
+
+    page = client.get("/tasks/list/all/?category=MIS")
+
+    assert {row.pk for row in page.context["table"].page} == {in_mis.pk}
+    assert "Only: <strong>MIS</strong>" in page.content.decode() and ">Later</td>" in page.content.decode()  # When label from DUE_GROUPS

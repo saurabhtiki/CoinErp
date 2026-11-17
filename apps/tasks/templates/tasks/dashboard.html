@@ -10,7 +10,7 @@
 <script src="{% static 'vendor/chart.umd.min.js' %}"></script>
 
 <div id="dashboard-body">
-{% for problem in problems %}<div role="alert" class="alert alert-warning alert-soft text-sm mb-3 py-2">{{ problem }}</div>{% endfor %}
+{% include "tasks/partials/filter_notes.html" %}
 <form method="get" action="{% url 'tasks:dashboard' %}" class="flex flex-wrap items-end gap-2 mb-4"
       hx-get="{% url 'tasks:dashboard' %}" hx-trigger="change" hx-target="#dashboard-body" hx-select="#dashboard-body"
       hx-swap="outerHTML" hx-push-url="true" title="Every number below counts only the tasks that match these filters">
@@ -75,34 +75,45 @@
 {% include "tasks/partials/people_table.html" %}
 
 {{ charts|json_script:"chart-data" }}
+
+</div>
 <script>
+  // Draws each chart whose canvas has none yet: on load, after a filter change (new canvases) and after
+  // the Back button (htmx puts back a saved copy of the page, with empty canvases).
   (function () {
-    const data = JSON.parse(document.getElementById("chart-data").textContent);
-    const style = getComputedStyle(document.documentElement);
-    const colour = (name) => style.getPropertyValue(name).trim() || "#3b82f6";
-    const draw = (id, chart, cssColour) => {
-      const canvas = document.getElementById(id);
-      if (!canvas || !window.Chart) return;
-      Chart.getChart(canvas)?.destroy();  // a filter change may run this again on the same canvas
-      new Chart(canvas, {
-        type: "bar",
-        data: { labels: chart.labels, datasets: [{ data: chart.values, backgroundColor: colour(cssColour), borderRadius: 4 }] },
-        options: {
-          indexAxis: "y", maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { x: { beginAtZero: true, ticks: { precision: 0, color: colour("--color-base-content") } },
-                    y: { ticks: { color: colour("--color-base-content") } } },
-          // A click on a bar (or anywhere on its row) opens the tasks it counts.
-          onClick: (event, bars, graph) => {
-            const hit = bars[0] || graph.getElementsAtEventForMode(event, "y", { intersect: false }, false)[0];
-            if (hit) window.location.href = chart.urls[hit.index];
+    if (window.taskChartsReady) return;  // this script comes back with the page on Back: listen once
+    window.taskChartsReady = true;
+    const drawAll = () => {
+      const source = document.getElementById("chart-data");
+      if (!source || !window.Chart) return;
+      const data = JSON.parse(source.textContent);
+      const style = getComputedStyle(document.documentElement);
+      const colour = (name) => style.getPropertyValue(name).trim() || "#3b82f6";
+      const draw = (id, chart, cssColour) => {
+        const canvas = document.getElementById(id);
+        if (!canvas || Chart.getChart(canvas)) return;
+        new Chart(canvas, {
+          type: "bar",
+          data: { labels: chart.labels, datasets: [{ data: chart.values, backgroundColor: colour(cssColour), borderRadius: 4 }] },
+          options: {
+            indexAxis: "y", maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { precision: 0, color: colour("--color-base-content") } },
+                      y: { ticks: { color: colour("--color-base-content") } } },
+            // A click on a bar (or anywhere on its row) opens the tasks it counts.
+            onClick: (event, bars, graph) => {
+              const hit = bars[0] || graph.getElementsAtEventForMode(event, "y", { intersect: false }, false)[0];
+              if (hit) window.location.href = chart.urls[hit.index];
+            },
           },
-        },
-      });
+        });
+      };
+      draw("chart-status", data.status, "--color-primary");
+      draw("chart-category", data.category, "--color-secondary");
     };
-    draw("chart-status", data.status, "--color-primary");
-    draw("chart-category", data.category, "--color-secondary");
+    drawAll();
+    document.body.addEventListener("htmx:afterSettle", drawAll);
+    document.body.addEventListener("htmx:historyRestore", drawAll);
   })();
 </script>
-</div>
 {% endblock %}

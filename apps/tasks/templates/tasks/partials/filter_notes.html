@@ -1,0 +1,8 @@
+{# Filters a list or the dashboard got from the address: refused ones (yellow) and the ones applied (blue). Needs `problems`, `notes`. #}
+{% for problem in problems %}<div role="alert" class="alert alert-warning alert-soft text-sm mb-3 py-2">{{ problem }}</div>{% endfor %}
+{% if notes %}
+  <div role="status" class="alert alert-info alert-soft text-sm mb-3 py-2" title="Filters that came from the dashboard number you clicked">
+    <span>Only: <strong>{{ notes|join:", " }}</strong></span>
+    <a href="{{ request.path }}" class="link" title="Drop these filters and show the whole list">Show all</a>
+  </div>
+{% endif %}

@@ -46,7 +46,8 @@ SHORTCUTS = (
     ("Overdue", "due_group", "overdue", "Only tasks that are late"),
 )
 TABS = ("actions", "files", "comments")
-FILTERS = ("company", "person", "category", "priority")  # the dashboard filter bar, kept in the address
+FILTERS = services.FILTER_NAMES  # the dashboard filter bar, kept in the address
+LIST_FILTERS = ("company", "person", "category")  # the task list has its own Priority column filter
 OPEN_GROUPS = ("overdue", "today", "week", "later")  # every "When" of a task that is not completed
 CALENDAR_YEARS = (2000, 2100)  # months outside this are refused (and the date maths stays safe)
 PEOPLE_COLUMNS = [
@@ -127,17 +128,19 @@ class TaskListView(TasksView):
             owner_name=F("owner__first_name"), category_name=F("category__name")
         )
         # Filters a dashboard number brings along (the table's own filters come on top).
-        extra, problems = services.read_filters(request.user, request.GET, names=("company", "person"))
-        rows = services.filtered(rows, extra)
-        choices = services.filter_choices(request.user) if extra else {}
-        notes = [dict(choices[name])[value] for name, value in extra.items()]
+        # Priority is a column of this table, so the table itself reads ?priority=.
+        filters, notes, problems = services.read_filters(request.user, request.GET, names=LIST_FILTERS)
+        rows = services.filtered(rows, filters)
+        if request.GET.get("team") == "1":
+            rows = rows.filter(pk__in=services.team_tasks(request.user).values("pk"))
+            notes.append("tasks you look after")
         if request.GET.get("done") == "month":
             rows = services.done_this_month(rows)
             notes.append("completed this month")
         table = DataTable(
             request.GET, rows, COLUMNS, table_id="tasks-table", default_sort=("due_date",), base_url=request.path,
             search_fields=("title", "description"), search_placeholder="Search tasks", shortcuts=SHORTCUTS,
-            noun="tasks", keep=("company", "person", "done"),
+            noun="tasks", keep=(*LIST_FILTERS, "team", "done"),
         )
         context = {"table": table, "title": title, "lists": LISTS, "view": view, "tab": view, "notes": notes,
                    "problems": problems}
@@ -180,7 +183,7 @@ class DashboardView(TasksView):
 
     def get(self, request):
         choices = services.filter_choices(request.user)
-        filters, problems = services.read_filters(request.user, request.GET, choices=choices)
+        filters, _, problems = services.read_filters(request.user, request.GET, choices=choices)
         numbers = services.dashboard_numbers(request.user, filters=filters)
         table = DataTable(
             request.GET, services.people_numbers(request.user, filters=filters), PEOPLE_COLUMNS, table_id="people-table",
@@ -190,14 +193,14 @@ class DashboardView(TasksView):
         cards = [
             {
                 "label": label, "count": numbers["cards"][key], "colour": colour, "tooltip": tooltip,
-                "url": drill_url(list_slug, filters, query),
+                "url": list_url("tasks:list", filters, query, list_slug),
             }
             for key, label, list_slug, query, colour, tooltip in CARDS
         ]
         action_cards = [
             {
                 "label": label, "count": numbers["action_cards"][key], "colour": colour, "tooltip": tooltip,
-                "url": actions_url({**filters, "person": str(request.user.pk)} if key == "mine" else filters, query),
+                "url": list_url("tasks:actions", {**filters, "person": str(request.user.pk)} if key == "mine" else filters, query),
             }
             for key, label, query, colour, tooltip in ACTION_CARDS
         ]
@@ -206,13 +209,13 @@ class DashboardView(TasksView):
             "status": {
                 "labels": [label for _, label, _ in numbers["by_status"]],
                 "values": [total for _, _, total in numbers["by_status"]],
-                "urls": [drill_url("all", filters, f"status={value}") for value, _, _ in numbers["by_status"]],
+                "urls": [list_url("tasks:list", filters, f"status={value}", "all") for value, _, _ in numbers["by_status"]],
             },
             "category": {
                 "labels": [label for _, label, _ in numbers["by_category"]],
                 "values": [total for _, _, total in numbers["by_category"]],
                 "urls": [
-                    drill_url("all", {**filters, "category": value}, open_query)
+                    list_url("tasks:list", {**filters, "category": value}, open_query, "all")
                     for value, _, _ in numbers["by_category"]
                 ],
             },
@@ -228,39 +231,26 @@ class DashboardView(TasksView):
         return table_response(request, table, "tasks/dashboard.html", "tasks/partials/people_table.html", context)
 
 
-def drill_url(list_slug, filters, query=""):
-    """A task list link that shows exactly what a dashboard number counted.
-
-    Company and Person go as the list's own filters; Category and Priority as its table filters.
-    Example: drill_url("all", {"company": "2", "priority": "high"}, "due_group=overdue")
-             -> "/tasks/list/all/?company=2&priority=high&due_group=overdue"
-    """
-    pairs = [(name, filters[name]) for name in ("company", "person") if name in filters]
-    if "category" in filters:
-        pairs.append(("category_name", filters["category"]))
-    if "priority" in filters:
-        pairs.append(("priority", filters["priority"]))
-    query = "&".join(part for part in (urlencode(pairs), query) if part)
-    return reverse("tasks:list", args=[list_slug]) + (f"?{query}" if query else "")
-
-
-def actions_url(filters, query=""):
-    """An Actions list link with the dashboard filters. Person = the action's person.
-    Example: actions_url({"company": "2"}, "due_group=overdue") -> "/tasks/actions/?company=2&due_group=overdue"
+def list_url(url_name, filters, query="", *args):
+    """A list link that shows exactly what a dashboard number counted, with the dashboard filters.
+    Both lists read the same filter names. Example:
+    list_url("tasks:list", {"company": "2"}, "due_group=overdue", "all") -> "/tasks/list/all/?company=2&due_group=overdue"
     """
     query = "&".join(part for part in (urlencode(filters), query) if part)
-    return reverse("tasks:actions") + (f"?{query}" if query else "")
+    return reverse(url_name, args=args) + (f"?{query}" if query else "")
 
 
 def person_urls(filters, open_query):
-    """Links for the People rows, without the person: each row adds "&person=<its id>" (each link has a "?")."""
+    """Links for the People rows, without the person: each row adds "&person=<its id>".
+    team=1 keeps the list to the tasks the People table counts (those the user looks after)."""
     base = {name: value for name, value in filters.items() if name != "person"}
+    base["team"] = "1"
     return {
-        "open": drill_url("all", base, open_query),
-        "overdue": drill_url("all", base, "due_group=overdue"),
-        "done": drill_url("all", base, "done=month"),
-        "open_actions": actions_url(base) + ("" if base else "?"),
-        "overdue_actions": actions_url(base, "due_group=overdue"),
+        "open": list_url("tasks:list", base, open_query, "all"),
+        "overdue": list_url("tasks:list", base, "due_group=overdue", "all"),
+        "done": list_url("tasks:list", base, "done=month", "all"),
+        "open_actions": list_url("tasks:actions", base),
+        "overdue_actions": list_url("tasks:actions", base, "due_group=overdue"),
     }
 
 
@@ -269,16 +259,16 @@ class ActionListView(TasksView):
     A row opens its task's panel on the Actions tab, where it can be ticked done."""
 
     def get(self, request):
-        picked_any = any(request.GET.get(name) for name in FILTERS)
-        choices = services.filter_choices(request.user) if picked_any else {}
-        filters, problems = services.read_filters(request.user, request.GET, choices=choices)
+        filters, notes, problems = services.read_filters(request.user, request.GET)
         rows = services.filtered(services.visible_open_actions(request.user), filters, via="task__")
+        if request.GET.get("team") == "1":
+            rows = rows.filter(task__in=services.team_tasks(request.user).values("pk"))
+            notes.append("tasks you look after")
         rows = rows.select_related("task")  # each row shows its task number
-        notes = [dict(choices[name])[value] for name, value in filters.items()]
         table = DataTable(
             request.GET, rows, ACTION_COLUMNS, table_id="actions-table", default_sort=("due_date",),
             base_url=request.path, search_fields=("title", "task__title"), search_placeholder="Search actions",
-            shortcuts=ACTION_SHORTCUTS, noun="actions", keep=FILTERS,
+            shortcuts=ACTION_SHORTCUTS, noun="actions", keep=(*FILTERS, "team"),
         )
         context = {"table": table, "title": "Open actions", "lists": LISTS, "tab": "actions", "notes": notes,
                    "problems": problems}

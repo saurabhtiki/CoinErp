@@ -7,13 +7,7 @@
           title="Add a one-time task">New task</button>
 </div>
 {% include "tasks/partials/tabs.html" %}
-{% for problem in problems %}<div role="alert" class="alert alert-warning alert-soft text-sm mb-3 py-2">{{ problem }}</div>{% endfor %}
-{% if notes %}
-  <div role="status" class="alert alert-info alert-soft text-sm mb-3 py-2" title="Filters that came from the dashboard number you clicked">
-    <span>Only: <strong>{{ notes|join:", " }}</strong></span>
-    <a href="{{ request.path }}" class="link" title="Drop these filters and show the whole list">Show all</a>
-  </div>
-{% endif %}
+{% include "tasks/partials/filter_notes.html" %}
 {% include "tasks/partials/table.html" %}
 <div id="task-panel"></div>
 {% endblock %}

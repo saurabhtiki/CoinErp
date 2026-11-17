@@ -6,6 +6,12 @@ register = template.Library()
 
 
 @register.filter
+def due_label(group):
+    """The words for a row's "When". Example: "week" -> "Next 7 days"."""
+    return services.DUE_GROUPS.get(group, "")
+
+
+@register.filter
 def can_finish(task, user):
     """Show the Done button on a list row? Example: {% if row|can_finish:request.user %}."""
     return services.can_finish_row(user, task)

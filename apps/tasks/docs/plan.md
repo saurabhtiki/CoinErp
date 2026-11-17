@@ -79,6 +79,9 @@ Example: Amar -> Open actions 3, Overdue actions 1.
 - You are always in the Person list (so "My open actions" works even if you own nothing yet).
 - The Actions list has a "My actions" button instead of a "Mine" shortcut button.
 - Tests: `tests/test_tasks_dashboard_filters.py` (Part A) and `tests/test_tasks_dashboard_actions.py` (Part B).
+- Code review fixes: People links add `team=1`, so a list shows only the tasks the People table counted;
+  both lists read the same filter names (the task list leaves Priority to its own column filter); charts are
+  drawn again after the Back button.
 
 ## Finish
 `uv run pytest`, click through in the browser (filters, each kind of drill-down, Actions list), `/code-review`,
