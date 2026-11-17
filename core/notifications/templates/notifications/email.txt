@@ -1,0 +1,14 @@
+{% autoescape off %}Hello {{ name }},
+
+{{ title }}
+
+{{ message }}
+{% if link_url %}
+Open in Coin: {{ link_url }}
+{% endif %}
+Regards,
+Coin
+
+--
+You get this email because you are part of this in Coin. Reply in Coin, not to this email.
+{% endautoescape %}

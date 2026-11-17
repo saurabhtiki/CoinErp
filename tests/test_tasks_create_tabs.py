@@ -146,3 +146,36 @@ def test_files_added_on_the_new_form_open_only_for_people_who_see_the_task(peopl
 
     assert file_for_download(people["het"], stored) is not None
     assert file_for_download(people["outsider"], stored) is None
+
+
+@pytest.mark.django_db
+def test_create_over_a_list_closes_the_window_and_pops_up_created(people, acme, client):
+    client.force_login(people["saurabh"])
+    over_list = {**HTMX, "HTTP_HX_CURRENT_URL": "http://testserver/tasks/list/mine/"}
+
+    response = client.post("/tasks/new/", new_task_data(people, acme), **over_list)
+    task = Task.objects.get(title="Bank reco")
+    page = client.get("/tasks/list/mine/").content.decode()
+
+    assert response.status_code == 204
+    assert response["HX-Redirect"] == "http://testserver/tasks/list/mine/"
+    assert f"Task {task.code} created: Bank reco" in page
+
+
+@pytest.mark.django_db
+def test_new_task_email_greets_the_owner_and_lists_the_task_details(people, acme, client):
+    from django.core import mail
+
+    client.force_login(people["saurabh"])
+    client.post("/tasks/new/", new_task_data(people, acme, description="Match the bank statement"), **HTMX)
+    task = Task.objects.get(title="Bank reco")
+
+    email = next(message for message in mail.outbox if message.to == [people["het"].email])
+    html = email.alternatives[0][0]
+    assert email.subject == "New task for you: Bank reco"
+    assert email.body.startswith(f"Hello {people['het'].first_name},")
+    for fact in (f"Task: {task.code} Bank reco", f"Company: {acme}", "Due date: 20 Nov 2026",
+                 f"Sent by: {people['saurabh']}", "Description: Match the bank statement", f"/tasks/{task.pk}/"):
+        assert fact in email.body
+    assert "Open in Coin" in html and "Match the bank statement" in html
+    assert Notification.objects.get(user=people["het"]).message == f"{task.code}, due 20 Nov 2026."  # bell stays short

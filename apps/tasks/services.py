@@ -34,7 +34,7 @@ from core.files.services import attach, attachments_for, copy_attachment
 from core.files.validators import validate_attachment
 from core.masters.models import Company
 from core.notifications.models import NotificationLog
-from core.notifications.services import notify
+from core.notifications.services import DEFAULT_CHANNELS, notify
 
 from . import schedule
 from .models import (
@@ -450,13 +450,27 @@ def record_link(record):
     return task_link(record)
 
 
+def email_details(task, actor):
+    """The task's key facts for the email (the bell stays short). Example:
+    "Task: TSK-0012 GST return\\nCompany: Acme\\nOwner: Amar Shah\\n...\\nSent by: Saurabh"."""
+    lines = [f"Task: {task.code} {task.title}", f"Company: {task.company}", f"Owner: {task.owner}"]
+    if task.reviewer:
+        lines.append(f"Reviewer: {task.reviewer}")
+    if task.category:
+        lines.append(f"Category: {task.category}")
+    lines += [f"Priority: {task.get_priority_display()}", f"Due date: {_day(task.due_date)}",
+              f"Status: {task.get_status_display()}", f"Sent by: {actor}"]
+    if task.description.strip():
+        about = " ".join(task.description.split())
+        lines.append(f"Description: {about[:300]}{'…' if len(about) > 300 else ''}")
+    return "\n".join(lines)
+
+
 def _tell(users, actor, task, title, message="", channels=None):
     """Notify each user once, never the person who did the action. `task` may also be a repeating rule."""
+    details = email_details(task, actor) if isinstance(task, Task) else ""
     for user in {person for person in users if person and person.pk != actor.pk}:
-        if channels:
-            notify(user, title, message, channels=channels, link=record_link(task))
-        else:
-            notify(user, title, message, link=record_link(task))
+        notify(user, title, message, channels=channels or DEFAULT_CHANNELS, link=record_link(task), details=details)
 
 
 def _day(value):

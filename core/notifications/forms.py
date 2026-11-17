@@ -28,6 +28,12 @@ class EmailSettingsForm(forms.ModelForm):
 
     def clean_password(self):
         typed = self.cleaned_data["password"]
+        is_gmail = "gmail" in (self.cleaned_data.get("host") or "").lower()
+        if typed and is_gmail and len(typed.replace(" ", "")) != 16:
+            raise forms.ValidationError(
+                "This is not a Gmail App Password: those are 16 letters, like 'abcd efgh ijkl mnop'. "
+                "Make one at myaccount.google.com/apppasswords (2-Step Verification must be on)."
+            )
         if typed:
             try:
                 self.encrypted_password = services.encrypt_password(typed)

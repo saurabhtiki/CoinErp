@@ -22,6 +22,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMessage, send_mail
 from django.core.mail.backends.smtp import EmailBackend as SmtpBackend
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django_q.tasks import async_task
@@ -34,14 +35,16 @@ Status = NotificationLog.Status
 DEFAULT_CHANNELS = (Channel.EMAIL, Channel.IN_APP)
 
 
-def notify(user, title, message="", channels=DEFAULT_CHANNELS, link=""):
-    """Send one message to one user. Returns the log rows (one per channel)."""
+def notify(user, title, message="", channels=DEFAULT_CHANNELS, link="", details=""):
+    """Send one message to one user. Returns the log rows (one per channel).
+    details: extra "Label: value" lines for the email only (the bell stays short), e.g. "Owner: Amar\nDue date: 20 Nov"."""
     unknown = set(channels) - set(Channel.values)
     if unknown:
         raise ValueError(f"Unknown notification channel(s): {', '.join(sorted(unknown))}")
     logs = []
     for channel in channels:
-        log = NotificationLog.objects.create(user=user, channel=channel, title=title, message=message, link=link)
+        text = "\n\n".join(part for part in (message, details) if part) if channel == Channel.EMAIL else message
+        log = NotificationLog.objects.create(user=user, channel=channel, title=title, message=text, link=link)
         if channel == Channel.IN_APP:
             Notification.objects.create(user=user, title=title, message=message, link=link)
             _mark(log, Status.SENT)
@@ -73,14 +76,12 @@ def send_email(log_id):
         logger.info("Email %s skipped: email is switched off in Email settings", log.pk)
         _mark(log, Status.SKIPPED, SWITCHED_OFF)
         return
-    body = log.message
-    if log.link:
-        body = f"{body}\n\nOpen: {settings.SITE_URL.rstrip('/')}{log.link}".strip()
+    body, html = email_body(log)
     waits = list(settings.NOTIFY_RETRY_WAITS)
     while True:
         log.attempts += 1
         try:
-            send_mail(log.title, body, None, [log.user.email], fail_silently=False)
+            send_mail(log.title, body, None, [log.user.email], fail_silently=False, html_message=html)
         except EmailSettingsError as error:  # e.g. the saved password can't be read: trying again won't help
             logger.error("Email %s to user %s not sent: %s", log.pk, log.user_id, error)
             _mark(log, Status.FAILED, str(error))
@@ -97,6 +98,27 @@ def send_email(log_id):
         else:
             _mark(log, Status.SENT)
             return
+
+
+def email_body(log):
+    """The email as (plain text, HTML): "Hello Amar,", the message, the details as a small table, a button, sign-off.
+    A block of "Label: value" lines becomes a table, e.g. "Owner: Amar\nDue date: 20 Nov 2026"."""
+    blocks = []
+    for block in (part.strip() for part in log.message.split("\n\n")):
+        lines = block.splitlines()
+        if lines and all(": " in line for line in lines):
+            blocks.append({"rows": [line.split(": ", 1) for line in lines]})
+        elif block:
+            blocks.append({"text": block})
+    context = {
+        "name": log.user.first_name or log.user.email.split("@")[0],
+        "title": log.title,
+        "message": log.message,
+        "blocks": blocks,
+        "link_url": f"{settings.SITE_URL.rstrip('/')}{log.link}" if log.link else "",
+    }
+    return (render_to_string("notifications/email.txt", context).strip(),
+            render_to_string("notifications/email.html", context))
 
 
 def notifications_for(user):
@@ -224,7 +246,10 @@ def plain_error(error, row=None):
     if isinstance(error, socket.gaierror):
         return "Could not find the mail server. Check the Mail server name."
     if isinstance(error, (ssl.SSLError, smtplib.SMTPServerDisconnected)):
-        return "The connection broke. Usually Security does not match the port: TLS for 587, SSL for 465."
+        return (
+            "The mail server closed the connection. Check two things: the password is an App Password "
+            "(Gmail: 16 letters), and Security matches the port: TLS for 587, SSL for 465."
+        )
     if isinstance(error, (ConnectionRefusedError, TimeoutError)):
         return f"{server} did not answer. Check the Port and Security, or ask IT whether the port is blocked."
     return f"Sending failed: {error or type(error).__name__}"

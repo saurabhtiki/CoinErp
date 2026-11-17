@@ -9,6 +9,17 @@
   <a role="tab" href="{% url 'tasks:rules' %}" class="tab whitespace-nowrap{% if tab == 'rules' %} tab-active{% endif %}" title="Rules that make the same task again and again, e.g. a tax return every month">Repeating</a>
   <a role="tab" href="{% url 'tasks:holidays' %}" class="tab whitespace-nowrap{% if tab == 'holidays' %} tab-active{% endif %}" title="Days off: repeating tasks avoid these dates">Holidays</a>
 </div>
+{# Errors stay on the page; "it worked" messages pop up top-right and hide after 5 seconds. #}
 {% for message in messages %}
-  <div role="alert" class="alert alert-soft {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %} text-sm mb-3">{{ message }}</div>
+  {% if message.tags == 'error' %}
+    <div role="alert" class="alert alert-soft alert-error text-sm mb-3">{{ message }}</div>
+  {% else %}
+    <div class="toast toast-top toast-end z-50 mt-14" x-data="{ show: true }" x-show="show" x-transition.opacity
+         x-init="setTimeout(() => show = false, 5000)">
+      <div role="status" class="alert alert-success text-sm shadow-lg">
+        <span>✓ {{ message }}</span>
+        <button type="button" class="btn btn-ghost btn-xs" @click="show = false" title="Hide this message">✕</button>
+      </div>
+    </div>
+  {% endif %}
 {% endfor %}

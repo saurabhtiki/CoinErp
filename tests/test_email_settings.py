@@ -75,6 +75,16 @@ def test_blank_password_keeps_the_saved_one_and_only_one_row_exists(client):
 
 
 @pytest.mark.django_db
+def test_gmail_refuses_a_normal_password_in_plain_words(client):
+    verified_admin(client)
+
+    page = client.post(ADD_URL, {**FORM, "password": "myGmail1!"}).content.decode()
+
+    assert not EmailSettings.objects.exists()
+    assert "This is not a Gmail App Password" in page
+
+
+@pytest.mark.django_db
 def test_only_the_superuser_sees_the_email_settings(client):
     row = saved_row()
     staff = User.objects.create_user(email="hr@example.com", password=PASSWORD, is_staff=True)

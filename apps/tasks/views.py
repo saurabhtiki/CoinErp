@@ -416,6 +416,9 @@ class TaskNewView(TasksView):
             else:
                 if not request.htmx:
                     return redirect("tasks:detail", pk=task.pk)
+                if list_behind(request):  # the window sat over a list: close it, reload the list, pop up "created"
+                    messages.success(request, f"Task {task.code} created: {task.title}")
+                    return HttpResponse(status=204, headers={"HX-Redirect": close_url(request)})
                 response = panel(request, task)
                 if shown_as_page(request):
                     response["HX-Push-Url"] = reverse("tasks:detail", args=[task.pk])
