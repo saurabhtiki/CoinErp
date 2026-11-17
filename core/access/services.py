@@ -166,6 +166,24 @@ def can_view_bank_details(user):
     return _is_usable(user) and user.has_perm("masters.view_bank_details")
 
 
+def team_rows(queryset, user, person_field="owner"):
+    """Rows this user looks after: the person on them is the user or someone who reports to them,
+    or the user is an admin of the row's company. Use for team numbers, e.g. a manager's dashboard.
+
+    Example: team_rows(Task.objects.all(), foram) -> Foram's and Het's tasks (Het reports to Foram).
+    """
+    from core.masters.services import team_user_ids_by_company
+
+    queryset = visible_rows(queryset, user)
+    if not _is_usable(user) or user.is_superuser:
+        return queryset
+    all_rows, _ = app_access_by_company(user, queryset.model.access_app_code())
+    team = Q(**{person_field: user}) | Q(company_id__in=all_rows)
+    for company_id, user_ids in team_user_ids_by_company(user).items():
+        team |= Q(company_id=company_id, **{f"{person_field}_id__in": user_ids})
+    return queryset.filter(team)
+
+
 def visible_records(model, user):
     """All rows of a model this user may see, for pages like History. Unknown kinds of model: none.
 

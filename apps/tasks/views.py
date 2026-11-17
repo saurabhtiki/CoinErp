@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
-from django_datatable import CHOICE, DATE, Column, DataTable, table_response
+from django_datatable import CHOICE, DATE, NUMBER, Column, DataTable, table_response
 
 from core.access.mixins import AppAccessRequiredMixin
 from core.access.services import companies_for_app
@@ -25,6 +25,7 @@ LISTS = {
     "mine": ("My tasks", services.my_tasks, "Tasks where you are owner, reviewer or collaborator, or have an action"),
     "assigned": ("Assigned by me", services.assigned_by_me, "Tasks you gave to someone else"),
     "all": ("All tasks", services.visible_tasks, "Every task you are allowed to see"),
+    "review": ("For my review", services.waiting_for_my_review, "Tasks sent to you for a check before they are completed"),
 }
 COLUMNS = [
     Column("number", "No."),
@@ -43,6 +44,21 @@ SHORTCUTS = (
     ("Overdue", "due_group", "overdue", "Only tasks that are late"),
 )
 TABS = ("actions", "files", "comments")
+PEOPLE_COLUMNS = [
+    Column("first_name", "Person"),
+    Column("open_count", "Open", type=NUMBER),
+    Column("overdue_count", "Overdue", type=NUMBER),
+    Column("done_count", "Done this month", type=NUMBER),
+    Column("on_time_percent", "On time %", type=NUMBER),
+]
+# The dashboard cards: (key in dashboard_numbers, label, list, filter, colour, tooltip)
+CARDS = (
+    ("overdue", "Overdue", "all", "due_group=overdue", "text-error", "Due date has passed and the task is not completed"),
+    ("today", "Due today", "all", "due_group=today", "text-warning", "Open tasks due today"),
+    ("week", "Next 7 days", "all", "due_group=week", "text-info", "Open tasks due in the coming 7 days (not today)"),
+    ("review", "For my review", "review", "", "text-primary", "Tasks sent to you for a check"),
+    ("blocked", "Blocked", "all", "status=blocked", "text-error", "Open tasks marked Blocked"),
+)
 
 
 class TasksView(AppAccessRequiredMixin, View):
@@ -90,6 +106,33 @@ class TaskListView(TasksView):
         )
         context = {"table": table, "title": title, "lists": LISTS, "view": view, "tab": view}
         return table_response(request, table, "tasks/list.html", "tasks/partials/table.html", context)
+
+
+class DashboardView(TasksView):
+    """Counts, a per-person table and two charts, all on tasks this user may see. Example: /tasks/dashboard/."""
+
+    def get(self, request):
+        numbers = services.dashboard_numbers(request.user)
+        table = DataTable(
+            request.GET, services.people_numbers(request.user), PEOPLE_COLUMNS, table_id="people-table",
+            default_sort=("-overdue_count", "first_name"), base_url=request.path,
+            search_fields=("first_name", "last_name"), search_placeholder="Search people", noun="people",
+        )
+        cards = [
+            {
+                "label": label, "count": numbers["cards"][key], "colour": colour, "tooltip": tooltip,
+                "url": reverse("tasks:list", args=[list_slug]) + (f"?{query}" if query else ""),
+            }
+            for key, label, list_slug, query, colour, tooltip in CARDS
+        ]
+        charts = {
+            "status": {"labels": [name for name, _ in numbers["by_status"]], "values": [n for _, n in numbers["by_status"]]},
+            "category": {
+                "labels": [name for name, _ in numbers["by_category"]], "values": [n for _, n in numbers["by_category"]]
+            },
+        }
+        context = {"table": table, "title": "Dashboard", "lists": LISTS, "tab": "dashboard", "cards": cards, "charts": charts}
+        return table_response(request, table, "tasks/dashboard.html", "tasks/partials/people_table.html", context)
 
 
 def panel(request, task, form=None, tab="actions", error="", action_form=None, status=200):

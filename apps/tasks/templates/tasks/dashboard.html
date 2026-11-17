@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <h1 class="text-2xl font-bold flex-1">{{ title }}</h1>
+  <a class="btn btn-primary btn-sm" href="{% url 'tasks:list' 'mine' %}" title="Open the list of your tasks">My tasks</a>
+</div>
+{% include "tasks/partials/tabs.html" %}
+
+<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
+  {% for card in cards %}
+    <a href="{{ card.url }}" class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow" title="{{ card.tooltip }}. Click to see them.">
+      <div class="card-body p-4">
+        <div class="text-sm text-base-content/70">{{ card.label }}</div>
+        <div class="text-3xl font-bold {% if card.count %}{{ card.colour }}{% endif %}">{{ card.count }}</div>
+      </div>
+    </a>
+  {% endfor %}
+</div>
+
+<div class="grid md:grid-cols-2 gap-4 mb-6">
+  <section class="card bg-base-100 shadow-sm">
+    <div class="card-body p-4">
+      <h2 class="card-title text-base" title="Tasks not yet completed, by status">Open tasks by status</h2>
+      {% if charts.status.values %}<div class="h-56"><canvas id="chart-status" aria-label="Open tasks by status"></canvas></div>
+      {% else %}<p class="text-sm text-base-content/70">No open tasks.</p>{% endif %}
+    </div>
+  </section>
+  <section class="card bg-base-100 shadow-sm">
+    <div class="card-body p-4">
+      <h2 class="card-title text-base" title="Tasks not yet completed, by category">Open tasks by category</h2>
+      {% if charts.category.values %}<div class="h-56"><canvas id="chart-category" aria-label="Open tasks by category"></canvas></div>
+      {% else %}<p class="text-sm text-base-content/70">No open tasks.</p>{% endif %}
+    </div>
+  </section>
+</div>
+
+<h2 class="text-lg font-semibold mb-1">People</h2>
+<p class="text-sm text-base-content/70 mb-3" title="On time % = tasks completed this month on or before their due date, out of all completed this month">
+  Your own tasks, your team's tasks, and everyone's if you are an admin. <strong>On time %</strong> counts tasks completed this month by their due date; "–" means none completed yet.
+</p>
+{% include "tasks/partials/people_table.html" %}
+
+{{ charts|json_script:"chart-data" }}
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+<script>
+  (function () {
+    const data = JSON.parse(document.getElementById("chart-data").textContent);
+    const style = getComputedStyle(document.documentElement);
+    const colour = (name) => style.getPropertyValue(name).trim() || "#3b82f6";
+    const draw = (id, chart, cssColour) => {
+      const canvas = document.getElementById(id);
+      if (!canvas || !window.Chart) return;
+      new Chart(canvas, {
+        type: "bar",
+        data: { labels: chart.labels, datasets: [{ data: chart.values, backgroundColor: colour(cssColour), borderRadius: 4 }] },
+        options: {
+          indexAxis: "y", maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0, color: colour("--color-base-content") } },
+                    y: { ticks: { color: colour("--color-base-content") } } },
+        },
+      });
+    };
+    draw("chart-status", data.status, "--color-primary");
+    draw("chart-category", data.category, "--color-secondary");
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,7 @@
+<tr>
+  <td data-dt-col="first_name" class="dt-sticky font-medium">{{ row.get_full_name|default:row.email }}</td>
+  <td data-dt-col="open_count" class="text-right" title="Tasks not yet completed">{{ row.open_count }}</td>
+  <td data-dt-col="overdue_count" class="text-right{% if row.overdue_count %} text-error font-medium{% endif %}" title="Open tasks whose due date has passed">{{ row.overdue_count }}</td>
+  <td data-dt-col="done_count" class="text-right" title="Tasks completed since the 1st of this month">{{ row.done_count }}</td>
+  <td data-dt-col="on_time_percent" class="text-right" title="{{ row.on_time_count }} of {{ row.done_count }} completed by the due date">{% if row.on_time_percent is None %}–{% else %}{{ row.on_time_percent }}%{% endif %}</td>
+</tr>

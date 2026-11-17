@@ -12,7 +12,7 @@ from itertools import takewhile
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Case, Count, Max, Q, Value, When
+from django.db.models import Case, Count, F, IntegerField, Max, Q, Value, When
 from django.urls import reverse
 from django.utils import timezone
 
@@ -24,6 +24,7 @@ from core.access.services import (
     is_person_or_admin,
     is_person_or_manager,
     manages_visible_record,
+    team_rows,
     users_for_app,
 )
 from core.masters.models import Company
@@ -96,6 +97,73 @@ def my_tasks(user):
 def assigned_by_me(user):
     """Tasks I gave to someone else."""
     return visible_tasks(user).filter(created_by=user).exclude(owner=user)
+
+
+def waiting_for_my_review(user):
+    """Tasks sent to me for a check."""
+    return visible_tasks(user).filter(reviewer=user, status=Status.UNDER_REVIEW)
+
+
+# ---------- dashboard ----------
+
+
+def dashboard_numbers(user, today=None):
+    """Everything the Tasks dashboard shows, counted only on tasks this user may see.
+
+    Example: {"cards": {"overdue": 3, "today": 1, "week": 4, "review": 2, "blocked": 1},
+              "by_status": [("Not Started", 5), ...], "by_category": [("MIS", 3), ...]}
+    """
+    today = today or timezone.localdate()
+    # Same rows as visible_tasks(), without the list's extra columns, so the counts group cleanly.
+    open_tasks = Task.objects.for_user(user).filter(is_active=True).exclude(status=Status.COMPLETED).order_by()
+    cards = open_tasks.aggregate(
+        overdue=Count("pk", filter=Q(due_date__lt=today)),
+        today=Count("pk", filter=Q(due_date=today)),
+        week=Count("pk", filter=Q(due_date__gt=today, due_date__lte=today + timedelta(days=7))),
+        blocked=Count("pk", filter=Q(status=Status.BLOCKED)),
+        review=Count("pk", filter=Q(reviewer=user, status=Status.UNDER_REVIEW)),
+    )
+    status_names = dict(Status.choices)
+    status_order = list(status_names)
+    by_status = sorted(
+        ((row["status"], row["total"]) for row in open_tasks.values("status").annotate(total=Count("pk"))),
+        key=lambda item: status_order.index(item[0]),
+    )
+    by_category = [
+        (row["category__name"] or "No category", row["total"])
+        for row in open_tasks.values("category__name").annotate(total=Count("pk")).order_by("-total", "category__name")
+    ]
+    by_status = [(status_names[status], total) for status, total in by_status]
+    return {"cards": cards, "by_status": by_status, "by_category": by_category}
+
+
+def people_numbers(user, today=None):
+    """One row per person whose tasks I look after (me, my team, or everyone where I am admin):
+    open, overdue, done this month and on-time % (done by the due date, out of done this month).
+
+    Example: Het -> open 4, overdue 1, done 8, on time 75. No task done this month -> on time None ("–").
+    """
+    today = today or timezone.localdate()
+    month_start = today.replace(day=1)
+    team_tasks = team_rows(Task.objects.filter(is_active=True), user)
+    team_task_ids = team_tasks.values("pk")
+    mine = Q(owned_tasks__in=team_task_ids)
+    is_open = mine & ~Q(owned_tasks__status=Status.COMPLETED)
+    done = mine & Q(owned_tasks__status=Status.COMPLETED, owned_tasks__completed_at__date__gte=month_start)
+    on_time = done & Q(owned_tasks__completed_at__date__lte=F("owned_tasks__due_date"))
+    rows = User.objects.filter(pk__in=team_tasks.values("owner")).annotate(
+        open_count=Count("owned_tasks", filter=is_open, distinct=True),
+        overdue_count=Count("owned_tasks", filter=is_open & Q(owned_tasks__due_date__lt=today), distinct=True),
+        done_count=Count("owned_tasks", filter=done, distinct=True),
+        on_time_count=Count("owned_tasks", filter=on_time, distinct=True),
+    )
+    return rows.annotate(
+        on_time_percent=Case(
+            When(done_count=0, then=Value(None)),
+            default=F("on_time_count") * 100 / F("done_count"),
+            output_field=IntegerField(),
+        )
+    )
 
 
 def people_of(company):
