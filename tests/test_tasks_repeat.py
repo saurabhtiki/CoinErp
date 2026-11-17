@@ -400,7 +400,7 @@ def test_daily_job_is_scheduled_once():
     call_command("setup_task_jobs")
     call_command("setup_task_jobs")
 
-    job = Schedule.objects.get()
+    job = Schedule.objects.get(name="tasks: create due tasks")
     assert (job.func, job.schedule_type) == ("apps.tasks.services.create_due_tasks", Schedule.DAILY)
 
 

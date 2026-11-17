@@ -10,6 +10,7 @@ import logging
 from datetime import date, timedelta
 from itertools import takewhile
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -772,3 +773,83 @@ def create_due_tasks(today=None, user=None):
             logger.exception("Repeating task %s (%s) could not make its tasks", rule.pk, rule.title)
     logger.info("Repeating tasks: %s task(s) made for %s", count, today)
     return count
+
+
+# ---------- daily morning email ----------
+
+EMAIL_ONLY = (NotificationLog.Channel.EMAIL,)
+
+
+def digest_for(user, today=None):
+    """What one person's morning email lists: their own tasks due today and overdue, and tasks waiting
+    for their review. Only tasks they may still see.
+
+    Example: {"today": [TSK-0012], "overdue": [TSK-0003], "review": []}
+    """
+    today = today or timezone.localdate()
+    open_owned = visible_tasks(user).filter(owner=user).exclude(status=Status.COMPLETED).order_by("due_date", "number")
+    return {
+        "today": list(open_owned.filter(due_date=today)),
+        "overdue": list(open_owned.filter(due_date__lt=today)),
+        "review": list(waiting_for_my_review(user).order_by("due_date", "number")),
+    }
+
+
+def is_working_day_for(user, today, off_days_cache=None):
+    """False only if today is off (Sunday, off Saturday, holiday) in every company where the user works in Tasks."""
+    off_days_cache = {} if off_days_cache is None else off_days_cache
+    companies = list(companies_for_app(user, Task.access_app_code()))
+    if not companies:
+        return not schedule.OffDays().is_off(today)
+    for company in companies:
+        if company.pk not in off_days_cache:
+            off_days_cache[company.pk] = off_days_of(company)
+        if not off_days_cache[company.pk].is_off(today):
+            return True
+    return False
+
+
+def _digest_text(user, lists, today):
+    site = settings.SITE_URL.rstrip("/")
+    parts = [f"Good morning {user.first_name or user.email},", ""]
+    for key, heading in (("today", "Due today"), ("overdue", "Overdue"), ("review", "Waiting for your review")):
+        if not lists[key]:
+            continue
+        parts.append(f"{heading} ({len(lists[key])}):")
+        for task in lists[key]:
+            due = f" (due {task.due_date:%d-%m-%Y})" if key != "today" else ""
+            parts.append(f"- {task.code} {task.title}{due}: {site}{task_link(task)}")
+        parts.append("")
+    return "\n".join(parts).strip()
+
+
+def send_daily_digest(today=None):
+    """The 7:00 am job: one email per person with something due today, overdue or waiting for their review.
+
+    Nobody gets an empty email. Nothing is sent to a person on their day off (off in all their companies).
+    One person's error is logged and does not stop the others. Returns how many emails were sent.
+    """
+    today = today or timezone.localdate()
+    open_tasks = Task.objects.filter(is_active=True).exclude(status=Status.COMPLETED)
+    owner_ids = open_tasks.filter(due_date__lte=today).values("owner_id")
+    reviewer_ids = open_tasks.filter(status=Status.UNDER_REVIEW).values("reviewer_id")
+    people = User.objects.filter(Q(pk__in=owner_ids) | Q(pk__in=reviewer_ids), is_active=True).exclude(email="")
+    off_days_cache, sent = {}, 0
+    for person in people:
+        try:
+            if not is_working_day_for(person, today, off_days_cache):
+                continue
+            lists = digest_for(person, today)
+            if not any(lists.values()):
+                continue
+            title = (
+                f"Your tasks for {today:%d %b %Y}: {len(lists['today'])} due today, "
+                f"{len(lists['overdue'])} overdue, {len(lists['review'])} to review"
+            )
+            notify(person, title, _digest_text(person, lists, today), channels=EMAIL_ONLY,
+                   link=reverse("tasks:list", args=["mine"]))
+            sent += 1
+        except Exception:  # noqa: BLE001  one person's problem must not stop the others; the full error goes to the log
+            logger.exception("Daily task email for user %s could not be sent", person.pk)
+    logger.info("Daily task email: %s sent for %s", sent, today)
+    return sent
