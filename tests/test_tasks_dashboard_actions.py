@@ -165,3 +165,19 @@ def test_task_list_reads_the_same_category_filter_as_the_actions_list(client, pe
 
     assert {row.pk for row in page.context["table"].page} == {in_mis.pk}
     assert "Only: <strong>MIS</strong>" in page.content.decode() and ">Later</td>" in page.content.decode()  # When label from DUE_GROUPS
+
+
+@pytest.mark.django_db
+def test_task_and_action_cards_sit_in_two_tabs_and_the_picked_tab_is_remembered(client, people, acme, actions):
+    client.force_login(people["foram"])
+
+    first = client.get("/tasks/dashboard/").content.decode()
+    picked = client.get("/tasks/dashboard/?priority=high&cards=actions").content.decode()
+
+    def checked(page, tab):
+        tag = page[page.index(f'id="card-tab-{tab}"'):]
+        return " checked" in tag[:tag.index(">")]
+
+    assert checked(first, "tasks") and not checked(first, "actions")  # Tasks tab first
+    assert checked(picked, "actions") and not checked(picked, "tasks")  # a filter change keeps Actions
+    assert 'form="dashboard-filters"' in first  # the tabs travel with the filters

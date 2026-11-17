@@ -1,0 +1,41 @@
+{% extends "admin/change_form.html" %}
+{# Email settings: last test result and warnings at the top, "Send test email" next to History. #}
+
+{% block object-tools-items %}
+  {% if original %}
+    <li>
+      <form method="post" action="{% url 'admin:notifications_emailsettings_send_test' original.pk %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="historylink" style="border:0;cursor:pointer"
+                title="Sends one email to {{ request.user.email|default:'your address' }} with the SAVED settings. Save your changes first.">
+          Send test email
+        </button>
+      </form>
+    </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+
+{% block form_top %}
+  {% if password_problem %}
+    <p class="errornote" title="The key in .env was lost or changed, so the saved password can't be unscrambled. No email is sent until you type it again.">
+      {{ password_problem }}
+    </p>
+  {% endif %}
+  {% if original and not original.sending_on %}
+    <p class="errornote" title="Emails are skipped and logged as 'Skipped'. The bell still works.">
+      Sending is switched off: no emails go out.
+    </p>
+  {% endif %}
+  {% if original.last_test_at %}
+    <p class="help" style="margin:0 0 1em" title="Result of the last 'Send test email'">
+      <strong>Last test:</strong>
+      {% if original.last_test_ok %}OK{% else %}failed{% endif %} on {{ original.last_test_at|date:"j M H:i" }}
+      {% if not original.last_test_ok %}– {{ original.last_test_message }}{% endif %}
+    </p>
+  {% elif original %}
+    <p class="help" style="margin:0 0 1em">Not tested yet. Save, then press <strong>Send test email</strong>.</p>
+  {% else %}
+    <p class="help" style="margin:0 0 1em">Until you save this page, emails use the settings in the server's .env file.</p>
+  {% endif %}
+{% endblock %}

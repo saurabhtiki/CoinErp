@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Sign in{% endblock %} · Group ERP</title>
+  <title>{% block title %}Sign in{% endblock %} · Coin</title>
+  <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
   <script src="{% static 'js/theme.js' %}"></script>
   {% tailwind_css %}
 </head>
@@ -12,7 +13,9 @@
 <div class="flex items-center justify-center p-4 min-h-[90vh]">
   <main class="card bg-base-100 w-full max-w-sm shadow-sm">
     <div class="card-body">
-      <p class="text-sm font-semibold text-base-content/60">Group ERP</p>
+      <p class="flex items-center gap-2 text-sm font-semibold text-base-content/60">
+        <img src="{% static 'img/coin-logo.png' %}" alt="" class="h-8 w-8 object-contain"> Coin
+      </p>
       <h1 class="card-title text-2xl">{% block heading %}{% endblock %}</h1>
       {% block content %}{% endblock %}
     </div>

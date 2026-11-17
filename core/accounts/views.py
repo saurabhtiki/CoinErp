@@ -1,10 +1,20 @@
+import logging
+import mimetypes
+
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import FileResponse, Http404
 from django.shortcuts import redirect
 from django.utils.safestring import mark_safe
+from django.views import View
 from django.views.generic import FormView
+
+from core.masters.services import own_photo_employee
 
 from . import services
 from .forms import OTPCodeForm
+
+logger = logging.getLogger(__name__)
+PHOTO_TYPES = {"image/png", "image/jpeg"}
 
 
 class OTPSetupView(LoginRequiredMixin, FormView):
@@ -45,3 +55,25 @@ class OTPVerifyView(LoginRequiredMixin, FormView):
             form.add_error("token", "That code is wrong or expired. Try the newest code in your app.")
             return self.form_invalid(form)
         return super().form_valid(form)
+
+
+class MyPhotoView(LoginRequiredMixin, View):
+    """Your own photo for the top bar. Only ever your own, so no other permission check is needed."""
+
+    def get(self, request):
+        employee = own_photo_employee(request.user)
+        if employee is None:
+            raise Http404("You have no photo yet.")
+        content_type = mimetypes.guess_type(employee.profile_photo.name)[0]
+        if content_type not in PHOTO_TYPES:
+            logger.warning("Photo %r of user %s is not a JPG or PNG", employee.profile_photo.name, request.user.pk)
+            raise Http404("Your photo is not a JPG or PNG.")
+        try:
+            handle = employee.profile_photo.open("rb")
+        except FileNotFoundError:
+            logger.error("Photo %r is in the database but missing on disk", employee.profile_photo.name)
+            raise Http404("Your photo is missing on the server. Please tell your admin.") from None
+        response = FileResponse(handle, content_type=content_type)
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, max-age=86400"  # the URL changes when the photo changes
+        return response

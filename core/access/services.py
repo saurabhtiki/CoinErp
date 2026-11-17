@@ -161,6 +161,11 @@ def can_change_company(user):
     return _is_usable(user) and user.is_superuser
 
 
+def can_manage_email_settings(user):
+    """The mail server and its password are for the group admin (superuser) only."""
+    return _is_usable(user) and user.is_superuser
+
+
 def can_view_bank_details(user):
     """Vendor/customer bank fields are shown only with the "view bank details" permission."""
     return _is_usable(user) and user.has_perm("masters.view_bank_details")

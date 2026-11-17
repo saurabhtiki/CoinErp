@@ -11,6 +11,7 @@ IS_SANDBOX = False
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+EMAIL_SETTINGS_KEY = "kSl1Hc4z0nN2pV5uYfQ3m8Wb7eTgXr6aJdLh9oUiCy0="  # test-only key, not secret
 Q_CLUSTER = {**Q_CLUSTER, "sync": True}  # noqa: F405
 NOTIFY_RETRY_WAITS = (0, 0)
 STORAGES = {

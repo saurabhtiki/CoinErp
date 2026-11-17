@@ -25,7 +25,8 @@ cd CoinErp
 ```bash
 cp .env.prod.example .env.prod
 ```
-Edit `.env.prod`: set a new `SECRET_KEY`, the real domain in `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and `SITE_URL`, a strong database password (in **both** `POSTGRES_PASSWORD` and `DATABASE_URL`), and the mail settings.
+Edit `.env.prod`: set a new `SECRET_KEY`, the real domain in `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and `SITE_URL`, a strong database password (in **both** `POSTGRES_PASSWORD` and `DATABASE_URL`), and a new `EMAIL_SETTINGS_KEY` (the command is in the file).
+Mail can be set up later in **Admin → Email settings** (superuser): type the server and App Password, press **Send test email**. Until that page is saved, the `EMAIL_*` lines in `.env.prod` are used. Back up `EMAIL_SETTINGS_KEY` with the database backups: without it the saved mail password must be typed again.
 
 ```bash
 sh docker/deploy.sh prod

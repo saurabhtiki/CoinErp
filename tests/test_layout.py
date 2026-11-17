@@ -127,3 +127,72 @@ def test_admin_link_only_for_staff(client, acme):
 
     client.force_login(make_user("staff@example.com", [acme], apps=["masters"], is_staff=True))
     assert b'href="/admin/"' in client.get("/").content
+
+
+PNG = b"\x89PNG\r\n\x1a\n test image"
+
+
+@pytest.fixture
+def private_folder(settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+
+
+def give_photo(user, company, code="E1"):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from core.masters.models import Employee
+
+    employee = Employee(company=company, employee_code=code, first_name="Ravi", user=user)
+    employee.profile_photo = SimpleUploadedFile("ravi.png", PNG)
+    employee.full_clean()
+    employee.save()
+    return employee
+
+
+@pytest.mark.django_db
+def test_page_shows_coin_logo_and_no_stray_template_comments(client, acme):
+    client.force_login(make_user("ravi@example.com", [acme], apps=["masters"]))
+
+    html = client.get("/").content.decode()
+
+    assert "img/coin-logo.png" in html
+    assert "{#" not in html and "#}" not in html  # a two-line {# #} comment prints as text and breaks the layout
+
+
+@pytest.mark.django_db
+def test_bell_loads_its_list_on_focus(client, acme):
+    """DaisyUI blocks clicks on an open dropdown's button, so "click" never reached htmx."""
+    client.force_login(make_user("ravi@example.com", [acme]))
+
+    html = client.get("/").content.decode()
+
+    assert 'hx-target="#bell-list" hx-trigger="focus"' in html
+
+
+@pytest.mark.django_db
+def test_top_bar_shows_own_photo_when_uploaded(client, acme, private_folder):
+    user = make_user("ravi@example.com", [acme])  # no Masters access: may not open employee records
+    client.force_login(user)
+    assert b"Your photo" not in client.get("/").content
+    assert client.get("/accounts/my-photo/").status_code == 404
+
+    give_photo(user, acme)
+    html = client.get("/").content.decode()
+
+    assert 'src="/accounts/my-photo/?v=' in html
+    response = client.get("/accounts/my-photo/")
+    assert response.status_code == 200
+    assert response["Content-Type"] == "image/png"
+
+
+@pytest.mark.django_db
+def test_my_photo_never_shows_someone_elses_photo(client, acme, private_folder):
+    asha = make_user("asha@example.com", [acme])
+    give_photo(asha, acme)
+    client.force_login(make_user("ravi@example.com", [acme], apps=["masters"]))
+
+    assert client.get("/accounts/my-photo/").status_code == 404
+
+
+def test_my_photo_needs_login(client):
+    assert client.get("/accounts/my-photo/").status_code == 302

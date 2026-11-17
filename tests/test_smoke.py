@@ -19,7 +19,7 @@ def test_home_opens_for_logged_in_user(client):
     response = client.get(reverse("core:home"))
 
     assert response.status_code == 200
-    assert b"Group ERP" in response.content
+    assert b"Coin" in response.content
 
 
 @pytest.mark.django_db

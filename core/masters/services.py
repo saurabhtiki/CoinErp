@@ -8,6 +8,22 @@ from .models import Customer, Employee, Vendor
 TEAM_CACHE = "_masters_team_by_company"
 
 
+def own_photo_employee(user):
+    """The user's own employee record that has a photo (any company), or None.
+
+    Example: Asha uploaded a photo on her Acme employee record -> that record, for the top bar.
+    """
+    if not user.is_authenticated:
+        return None
+    return (
+        Employee.objects.filter(user=user, is_active=True)
+        .exclude(profile_photo="")
+        .only("profile_photo", "updated_at")
+        .order_by("-updated_at")
+        .first()
+    )
+
+
 def team_user_ids_by_company(user):
     """Logins of everyone who reports to this user, at any level, per company.
 

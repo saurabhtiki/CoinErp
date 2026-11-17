@@ -128,7 +128,7 @@ def test_user_of_several_companies_gets_the_group_header(client, acme, globex, v
 
     content = client.get("/masters/vendors/?report=print").content.decode()
 
-    assert "Group ERP: all your companies" in content
+    assert "Coin: all your companies" in content
     assert "Secret Vendor" in content
 
 

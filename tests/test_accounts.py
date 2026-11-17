@@ -292,10 +292,33 @@ def test_normal_page_costs_one_role_query_for_2fa_and_sidebar(client, django_ass
     )
     client.force_login(user)
 
-    # session, user, roles, 4 Masters widget counts, bell count, approvals count
-    with django_assert_max_num_queries(9) as captured:
+    # session, user, roles, 4 Masters widget counts, bell count, approvals count, own photo
+    with django_assert_max_num_queries(10) as captured:
         client.get("/")
 
     role_queries = [q for q in captured.captured_queries if "accounts_companyrole" in q["sql"]
                     and "requires_2fa" in q["sql"]]
     assert len(role_queries) == 1
+
+
+@pytest.mark.django_db
+def test_role_screen_shows_apps_as_tick_boxes_and_saves_the_ticked_codes():
+    from core.accounts.forms import RoleForm
+
+    form = RoleForm(data={"name": "Masters editor", "allowed_apps": ["tasks", "masters"]})
+    html = str(form["allowed_apps"])
+
+    assert 'type="checkbox"' in html and "Masters" in html and 'title="' in html  # tick boxes with tooltips
+    assert form.is_valid(), form.errors
+    assert form.save().allowed_apps == ["tasks", "masters"]
+    assert not RoleForm(data={"name": "Bad", "allowed_apps": ["nope"]}).is_valid()  # no typos possible
+
+
+@pytest.mark.django_db
+def test_role_screen_keeps_a_code_of_an_app_that_is_not_installed():
+    from core.accounts.forms import RoleForm
+
+    role = Role.objects.create(name="Old", allowed_apps=["travel"])
+    form = RoleForm(instance=role)
+
+    assert "travel (app not installed)" in str(form["allowed_apps"]) and 'checked' in str(form["allowed_apps"])

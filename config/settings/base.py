@@ -77,6 +77,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.app_menu",
                 "core.context_processors.environment",
+                "core.context_processors.my_photo",
                 "core.notifications.context_processors.unread_notifications",
                 "core.approvals.context_processors.waiting_approvals",
             ],
@@ -113,7 +114,7 @@ AXES_LOCKOUT_TEMPLATE = "registration/locked.html"
 SILENCED_SYSTEM_CHECKS = ["axes.W006"]
 
 # 2FA: name shown in the authenticator app
-OTP_TOTP_ISSUER = "Group ERP"
+OTP_TOTP_ISSUER = "Coin"
 
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
@@ -155,6 +156,12 @@ IS_SANDBOX = ENVIRONMENT == "sandbox"
 DEMO_PASSWORD = env("DEMO_PASSWORD", default="")
 
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+if EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
+    # Same SMTP sending, but it first reads Admin -> Email settings; the lines below are used until that is saved.
+    EMAIL_BACKEND = "core.notifications.backends.EmailBackend"
+# Key that scrambles the mail password saved in Admin -> Email settings. Kept here, never in the database.
+# Make one: uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+EMAIL_SETTINGS_KEY = env("EMAIL_SETTINGS_KEY", default="")
 if IS_SANDBOX:
     # The sandbox never sends real mail: it is written to the log (and shown on the "Sent mail" page).
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

@@ -31,6 +31,9 @@
   --radius-box: 0.5rem;
   --radius-field: 0.375rem;
   --radius-selector: 0.375rem;
+  --border: 1px; /* without this every input, select and card border is 0px wide */
+  --depth: 1;
+  --noise: 0;
 }
 
 @plugin "daisyui/theme" {
@@ -60,6 +63,14 @@
   --radius-box: 0.5rem;
   --radius-field: 0.375rem;
   --radius-selector: 0.375rem;
+  --border: 1px; /* without this every input, select and card border is 0px wide */
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Form fields: a clear border so empty boxes are easy to see (default is too faint). */
+.input, .select, .textarea {
+  --input-color: color-mix(in oklab, var(--color-base-content) 30%, transparent);
 }
 
 /* django-datatable templates live inside the installed package, so Tailwind must look there too.

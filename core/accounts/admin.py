@@ -3,9 +3,10 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from core.access.admin import HistoryAdmin
 from core.access.services import can_use_admin
+from core.registry import all_apps
 
 from . import services
-from .forms import UserEditForm, UserInviteForm
+from .forms import RoleForm, UserEditForm, UserInviteForm
 from .models import CompanyRole, Role, User
 
 
@@ -15,14 +16,20 @@ def admin_site_permission(request):
 
 
 admin.site.has_permission = admin_site_permission
-admin.site.site_header = "Group ERP admin"
+admin.site.site_header = "Coin admin"
 
 
 @admin.register(Role)
 class RoleAdmin(HistoryAdmin):
-    list_display = ["name", "allowed_apps", "own_records_only", "requires_2fa"]
+    form = RoleForm
+    list_display = ["name", "apps", "own_records_only", "requires_2fa"]
     list_filter = ["own_records_only", "requires_2fa"]
     search_fields = ["name"]
+
+    @admin.display(description="Apps")
+    def apps(self, role):
+        names = {app.code: app.name for app in all_apps()}
+        return ", ".join(names.get(code, code) for code in role.allowed_apps) or "–"
 
 
 class CompanyRoleInline(admin.TabularInline):

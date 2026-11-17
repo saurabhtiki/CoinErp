@@ -59,7 +59,7 @@ class Report:
 
     @property
     def company_name(self):
-        return self.company.name if self.company else "Group ERP: all your companies"
+        return self.company.name if self.company else "Coin: all your companies"
 
     @property
     def company_lines(self):
