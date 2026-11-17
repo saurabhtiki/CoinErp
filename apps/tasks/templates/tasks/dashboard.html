@@ -7,6 +7,25 @@
   <a class="btn btn-primary btn-sm" href="{% url 'tasks:list' 'mine' %}" title="Open the list of your tasks">My tasks</a>
 </div>
 {% include "tasks/partials/tabs.html" %}
+<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+
+<div id="dashboard-body">
+{% for problem in problems %}<div role="alert" class="alert alert-warning alert-soft text-sm mb-3 py-2">{{ problem }}</div>{% endfor %}
+<form method="get" action="{% url 'tasks:dashboard' %}" class="flex flex-wrap items-end gap-2 mb-4"
+      hx-get="{% url 'tasks:dashboard' %}" hx-trigger="change" hx-target="#dashboard-body" hx-select="#dashboard-body"
+      hx-swap="outerHTML" hx-push-url="true" title="Every number below counts only the tasks that match these filters">
+  {% for name, label, options, picked in filter_fields %}
+    <label class="flex flex-col gap-1 text-sm">
+      <span class="text-base-content/70">{{ label }}</span>
+      <select name="{{ name }}" class="select select-sm w-40" title="{{ label }}: show only these tasks">
+        <option value="">All</option>
+        {% for value, text in options %}<option value="{{ value }}"{% if value == picked %} selected{% endif %}>{{ text }}</option>{% endfor %}
+      </select>
+    </label>
+  {% endfor %}
+  {% if filters %}<a href="{% url 'tasks:dashboard' %}" class="btn btn-ghost btn-sm" title="Remove all filters">Clear</a>{% endif %}
+  <noscript><button class="btn btn-sm">Apply</button></noscript>
+</form>
 
 <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
   {% for card in cards %}
@@ -22,15 +41,15 @@
 <div class="grid md:grid-cols-2 gap-4 mb-6">
   <section class="card bg-base-100 shadow-sm">
     <div class="card-body p-4">
-      <h2 class="card-title text-base" title="Tasks not yet completed, by status">Open tasks by status</h2>
-      {% if charts.status.values %}<div class="h-56"><canvas id="chart-status" aria-label="Open tasks by status"></canvas></div>
+      <h2 class="card-title text-base" title="Tasks not yet completed, by status. Click a bar to see them.">Open tasks by status</h2>
+      {% if charts.status.values %}<div class="h-56"><canvas id="chart-status" class="cursor-pointer" aria-label="Open tasks by status"></canvas></div>
       {% else %}<p class="text-sm text-base-content/70">No open tasks.</p>{% endif %}
     </div>
   </section>
   <section class="card bg-base-100 shadow-sm">
     <div class="card-body p-4">
-      <h2 class="card-title text-base" title="Tasks not yet completed, by category">Open tasks by category</h2>
-      {% if charts.category.values %}<div class="h-56"><canvas id="chart-category" aria-label="Open tasks by category"></canvas></div>
+      <h2 class="card-title text-base" title="Tasks not yet completed, by category. Click a bar to see them.">Open tasks by category</h2>
+      {% if charts.category.values %}<div class="h-56"><canvas id="chart-category" class="cursor-pointer" aria-label="Open tasks by category"></canvas></div>
       {% else %}<p class="text-sm text-base-content/70">No open tasks.</p>{% endif %}
     </div>
   </section>
@@ -38,12 +57,11 @@
 
 <h2 class="text-lg font-semibold mb-1">People</h2>
 <p class="text-sm text-base-content/70 mb-3" title="On time % = tasks completed this month on or before their due date, out of all completed this month">
-  Your own tasks, your team's tasks, and everyone's if you are an admin. <strong>On time %</strong> counts tasks completed this month by their due date; "–" means none completed yet.
+  Your own tasks, your team's tasks, and everyone's if you are an admin. Click a number to see those tasks. <strong>On time %</strong> counts tasks completed this month by their due date; "–" means none completed yet.
 </p>
 {% include "tasks/partials/people_table.html" %}
 
 {{ charts|json_script:"chart-data" }}
-<script src="{% static 'vendor/chart.umd.min.js' %}"></script>
 <script>
   (function () {
     const data = JSON.parse(document.getElementById("chart-data").textContent);
@@ -52,6 +70,7 @@
     const draw = (id, chart, cssColour) => {
       const canvas = document.getElementById(id);
       if (!canvas || !window.Chart) return;
+      Chart.getChart(canvas)?.destroy();  // a filter change may run this again on the same canvas
       new Chart(canvas, {
         type: "bar",
         data: { labels: chart.labels, datasets: [{ data: chart.values, backgroundColor: colour(cssColour), borderRadius: 4 }] },
@@ -60,6 +79,11 @@
           plugins: { legend: { display: false } },
           scales: { x: { beginAtZero: true, ticks: { precision: 0, color: colour("--color-base-content") } },
                     y: { ticks: { color: colour("--color-base-content") } } },
+          // A click on a bar (or anywhere on its row) opens the tasks it counts.
+          onClick: (event, bars, graph) => {
+            const hit = bars[0] || graph.getElementsAtEventForMode(event, "y", { intersect: false }, false)[0];
+            if (hit) window.location.href = chart.urls[hit.index];
+          },
         },
       });
     };
@@ -67,4 +91,5 @@
     draw("chart-category", data.category, "--color-secondary");
   })();
 </script>
+</div>
 {% endblock %}

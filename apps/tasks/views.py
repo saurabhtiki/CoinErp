@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -46,6 +46,8 @@ SHORTCUTS = (
     ("Overdue", "due_group", "overdue", "Only tasks that are late"),
 )
 TABS = ("actions", "files", "comments")
+FILTERS = ("company", "person", "category", "priority")  # the dashboard filter bar, kept in the address
+OPEN_GROUPS = ("overdue", "today", "week", "later")  # every "When" of a task that is not completed
 CALENDAR_YEARS = (2000, 2100)  # months outside this are refused (and the date maths stays safe)
 PEOPLE_COLUMNS = [
     Column("first_name", "Person"),
@@ -102,12 +104,21 @@ class TaskListView(TasksView):
         rows = rows_for(request.user).annotate(
             owner_name=F("owner__first_name"), category_name=F("category__name")
         )
+        # Filters a dashboard number brings along (the table's own filters come on top).
+        extra, problems = services.read_filters(request.user, request.GET, names=("company", "person"))
+        rows = services.filtered(rows, extra)
+        choices = services.filter_choices(request.user) if extra else {}
+        notes = [dict(choices[name])[value] for name, value in extra.items()]
+        if request.GET.get("done") == "month":
+            rows = services.done_this_month(rows)
+            notes.append("completed this month")
         table = DataTable(
             request.GET, rows, COLUMNS, table_id="tasks-table", default_sort=("due_date",), base_url=request.path,
             search_fields=("title", "description"), search_placeholder="Search tasks", shortcuts=SHORTCUTS,
-            noun="tasks",
+            noun="tasks", keep=("company", "person", "done"),
         )
-        context = {"table": table, "title": title, "lists": LISTS, "view": view, "tab": view}
+        context = {"table": table, "title": title, "lists": LISTS, "view": view, "tab": view, "notes": notes,
+                   "problems": problems}
         return table_response(request, table, "tasks/list.html", "tasks/partials/table.html", context)
 
 
@@ -146,27 +157,72 @@ class DashboardView(TasksView):
     """Counts, a per-person table and two charts, all on tasks this user may see. Example: /tasks/dashboard/."""
 
     def get(self, request):
-        numbers = services.dashboard_numbers(request.user)
+        choices = services.filter_choices(request.user)
+        filters, problems = services.read_filters(request.user, request.GET, choices=choices)
+        numbers = services.dashboard_numbers(request.user, filters=filters)
         table = DataTable(
-            request.GET, services.people_numbers(request.user), PEOPLE_COLUMNS, table_id="people-table",
-            default_sort=("-overdue_count", "first_name"), base_url=request.path,
+            request.GET, services.people_numbers(request.user, filters=filters), PEOPLE_COLUMNS, table_id="people-table",
+            default_sort=("-overdue_count", "first_name"), base_url=request.path, keep=FILTERS,
             search_fields=("first_name", "last_name"), search_placeholder="Search people", noun="people",
         )
         cards = [
             {
                 "label": label, "count": numbers["cards"][key], "colour": colour, "tooltip": tooltip,
-                "url": reverse("tasks:list", args=[list_slug]) + (f"?{query}" if query else ""),
+                "url": drill_url(list_slug, filters, query),
             }
             for key, label, list_slug, query, colour, tooltip in CARDS
         ]
+        open_query = "&".join(f"due_group={group}" for group in OPEN_GROUPS)
         charts = {
-            "status": {"labels": [name for name, _ in numbers["by_status"]], "values": [n for _, n in numbers["by_status"]]},
+            "status": {
+                "labels": [label for _, label, _ in numbers["by_status"]],
+                "values": [total for _, _, total in numbers["by_status"]],
+                "urls": [drill_url("all", filters, f"status={value}") for value, _, _ in numbers["by_status"]],
+            },
             "category": {
-                "labels": [name for name, _ in numbers["by_category"]], "values": [n for _, n in numbers["by_category"]]
+                "labels": [label for _, label, _ in numbers["by_category"]],
+                "values": [total for _, _, total in numbers["by_category"]],
+                "urls": [
+                    drill_url("all", {**filters, "category": value}, open_query)
+                    for value, _, _ in numbers["by_category"]
+                ],
             },
         }
-        context = {"table": table, "title": "Dashboard", "lists": LISTS, "tab": "dashboard", "cards": cards, "charts": charts}
+        context = {
+            "table": table, "title": "Dashboard", "lists": LISTS, "tab": "dashboard", "cards": cards, "charts": charts,
+            "filters": filters, "problems": problems, "filter_fields": [
+                (name, name.title(), options, filters.get(name, ""))
+                for name, options in choices.items()
+            ],
+            "person_urls": person_urls(filters, open_query),
+        }
         return table_response(request, table, "tasks/dashboard.html", "tasks/partials/people_table.html", context)
+
+
+def drill_url(list_slug, filters, query=""):
+    """A task list link that shows exactly what a dashboard number counted.
+
+    Company and Person go as the list's own filters; Category and Priority as its table filters.
+    Example: drill_url("all", {"company": "2", "priority": "high"}, "due_group=overdue")
+             -> "/tasks/list/all/?company=2&priority=high&due_group=overdue"
+    """
+    pairs = [(name, filters[name]) for name in ("company", "person") if name in filters]
+    if "category" in filters:
+        pairs.append(("category_name", filters["category"]))
+    if "priority" in filters:
+        pairs.append(("priority", filters["priority"]))
+    query = "&".join(part for part in (urlencode(pairs), query) if part)
+    return reverse("tasks:list", args=[list_slug]) + (f"?{query}" if query else "")
+
+
+def person_urls(filters, open_query):
+    """Links for the People rows, without the person: each row adds "&person=<its id>" (each link has a "?")."""
+    base = {name: value for name, value in filters.items() if name != "person"}
+    return {
+        "open": drill_url("all", base, open_query),
+        "overdue": drill_url("all", base, "due_group=overdue"),
+        "done": drill_url("all", base, "done=month"),
+    }
 
 
 def panel(request, task, form=None, tab="actions", error="", action_form=None, status=200):

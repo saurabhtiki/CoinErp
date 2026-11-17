@@ -82,8 +82,8 @@ def test_charts_group_open_tasks_by_status_and_category(people, acme):
 
     numbers = services.dashboard_numbers(people["het"], TODAY)
 
-    assert numbers["by_status"] == [("Not Started", 2), ("In Progress", 1)]
-    assert numbers["by_category"] == [("MIS", 2), ("No category", 1)]
+    assert numbers["by_status"] == [("not_started", "Not Started", 2), ("in_progress", "In Progress", 1)]
+    assert numbers["by_category"] == [("MIS", "MIS", 2), (services.NO_CATEGORY, "No category", 1)]
 
 
 # --- People table -----------------------------------------------------------------------

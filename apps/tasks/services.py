@@ -112,16 +112,77 @@ def waiting_for_my_review(user):
 
 # ---------- dashboard ----------
 
+NO_CATEGORY = "__blank__"  # the category filter value for tasks without a category (same as the table's)
 
-def dashboard_numbers(user, today=None):
-    """Everything the Tasks dashboard shows, counted only on tasks this user may see.
+
+def filter_choices(user):
+    """What the dashboard filter bar offers: the user's Tasks companies, the owners of tasks they may see,
+    category names in their companies, and priorities. Example: {"company": [(2, "Acme")], ...}."""
+    companies = companies_for_app(user, "tasks")
+    owner_ids = Task.objects.for_user(user).filter(is_active=True).order_by().values("owner")
+    people = User.objects.filter(pk__in=owner_ids).order_by("first_name", "last_name")
+    names = TaskCategory.objects.filter(company__in=companies).order_by("name").values_list("name", flat=True)
+    return {
+        "company": [(str(company.pk), company.name) for company in companies.order_by("name")],
+        "person": [(str(person.pk), person.get_full_name() or person.email) for person in people],
+        "category": [(name, name) for name in dict.fromkeys(names)] + [(NO_CATEGORY, "No category")],
+        "priority": [(value, label) for value, label in Task.Priority.choices],
+    }
+
+
+def read_filters(user, params, names=("company", "person", "category", "priority"), choices=None):
+    """The picked filters that are allowed, and a message for each one that is not.
+
+    Example: ?company=2&person=99 where 99 is not someone whose tasks you see
+             -> ({"company": "2"}, ['The Person filter was ignored: ...'])
+    """
+    if not any(params.get(name) for name in names):
+        return {}, []
+    choices = choices or filter_choices(user)
+    picked, problems = {}, []
+    for name in names:
+        value = params.get(name, "").strip()
+        if not value:
+            continue
+        if value in dict(choices[name]):
+            picked[name] = value
+        else:
+            logger.info("Tasks filter %s=%r refused for user %s", name, value, user.pk)
+            problems.append(f"The {name.title()} filter was ignored: you can't pick that {name} here.")
+    return picked, problems
+
+
+def filtered(tasks, filters):
+    """Tasks narrowed by read_filters() values. Person = the task owner. Example: filtered(qs, {"priority": "high"})."""
+    if "company" in filters:
+        tasks = tasks.filter(company_id=filters["company"])
+    if "person" in filters:
+        tasks = tasks.filter(owner_id=filters["person"])
+    if filters.get("category") == NO_CATEGORY:
+        tasks = tasks.filter(category__isnull=True)
+    elif "category" in filters:
+        tasks = tasks.filter(category__name=filters["category"])
+    if "priority" in filters:
+        tasks = tasks.filter(priority=filters["priority"])
+    return tasks
+
+
+def done_this_month(tasks, today=None):
+    """Completed tasks whose completion falls in this month (the People table's "Done this month")."""
+    month_start = (today or timezone.localdate()).replace(day=1)
+    return tasks.filter(status=Status.COMPLETED, completed_at__date__gte=month_start)
+
+
+def dashboard_numbers(user, today=None, filters=None):
+    """Everything the Tasks dashboard shows, counted only on tasks this user may see, narrowed by `filters`.
 
     Example: {"cards": {"overdue": 3, "today": 1, "week": 4, "review": 2, "blocked": 1},
-              "by_status": [("Not Started", 5), ...], "by_category": [("MIS", 3), ...]}
+              "by_status": [("blocked", "Blocked", 5), ...], "by_category": [("MIS", "MIS", 3), ...]}
     """
     today = today or timezone.localdate()
     # Same rows as visible_tasks(), without the list's extra columns, so the counts group cleanly.
     open_tasks = Task.objects.for_user(user).filter(is_active=True).exclude(status=Status.COMPLETED).order_by()
+    open_tasks = filtered(open_tasks, filters or {})
     cards = open_tasks.aggregate(
         overdue=Count("pk", filter=Q(due_date__lt=today)),
         today=Count("pk", filter=Q(due_date=today)),
@@ -136,22 +197,23 @@ def dashboard_numbers(user, today=None):
         key=lambda item: status_order.index(item[0]),
     )
     by_category = [
-        (row["category__name"] or "No category", row["total"])
+        (row["category__name"] or NO_CATEGORY, row["category__name"] or "No category", row["total"])
         for row in open_tasks.values("category__name").annotate(total=Count("pk")).order_by("-total", "category__name")
     ]
-    by_status = [(status_names[status], total) for status, total in by_status]
+    by_status = [(status, status_names[status], total) for status, total in by_status]
     return {"cards": cards, "by_status": by_status, "by_category": by_category}
 
 
-def people_numbers(user, today=None):
+def people_numbers(user, today=None, filters=None):
     """One row per person whose tasks I look after (me, my team, or everyone where I am admin):
     open, overdue, done this month and on-time % (done by the due date, out of done this month).
+    `filters` narrows the tasks counted (and, for Person, the rows).
 
     Example: Het -> open 4, overdue 1, done 8, on time 75. No task done this month -> on time None ("–").
     """
     today = today or timezone.localdate()
     month_start = today.replace(day=1)
-    team_tasks = team_rows(Task.objects.filter(is_active=True), user)
+    team_tasks = filtered(team_rows(Task.objects.filter(is_active=True), user), filters or {})
     team_task_ids = team_tasks.values("pk")
     mine = Q(owned_tasks__in=team_task_ids)
     is_open = mine & ~Q(owned_tasks__status=Status.COMPLETED)

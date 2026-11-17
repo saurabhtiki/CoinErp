@@ -1,105 +1,80 @@
-# Tasks: Phase T4 plan (Add actions, files and comments while creating)
+# Tasks: Phase T5 plan (Dashboard: open actions, drill-down, filters)
 
-Status (2026-11-17): T4 done. Part A and Part B built, tested and committed.
+Status (2026-11-17): Part A done (filters, drill-down). Part B (open actions) waiting for OK.
 Still open from T3: Part D (import from the old Sheet), to be built when the CSV files are shared.
+T1-T4 are done (see git history for their plans).
 
 ## Context
-Today the **New task** and **New repeating task** forms only take the basic fields. Actions, files and links
-can be added only after saving, from the side panel. In T4 both forms get **tabs**, and one click saves
-everything together.
+Today the dashboard has 5 task cards, 2 charts and a People table. Only the cards can be clicked.
+There are no filters and no actions anywhere on it, and there is no page that lists actions.
 
 Work in 2 parts. Each part = code + tests + commit, then I stop for your OK.
-Permissions: only the shared access layer and core files (`core/files/services.py`). No new checks in the app.
+Permissions: everything counts only tasks the user may see (`Task.objects.for_user` / `visible_tasks`).
+No new checks in the app.
 
-## Part A. New task with tabs (no database change)
-Tabs at the top of the New task form:
-
-```
-[ Details ] [ Actions (2) ] [ Files & links (1) ] [ Comment ]
-```
-
-- **Details**: today's fields (company, title, owner, due date, reviewer, category, priority, collaborators,
-  description).
-- **Actions**: "+ Add action" adds a row (what, who, due date); ✕ removes it. A new row starts with
-  who = the task owner and due date = the task due date. Rows are added in the browser (Alpine), with no server call.
-- **Files & links**: choose one or more files (same rules as now: up to 10 MB each; PDF, JPG, PNG, Excel,
-  Word, CSV) and add link rows (name + web address).
-- **Comment**: the first comment (this already exists; it moves into its own tab).
-- **Create task** sends everything at once (`hx-encoding="multipart/form-data"`).
-- **Errors**: the tab that has an error gets a red dot (●), and the form opens on the first such tab.
-  Example: "Actions ●" with "Row 2: pick who does this action". Nothing is saved until all of it is right.
-- **Saving** (`services.create_task(..., actions=[...], links=[...], files=[...])`, one transaction):
-  all files are checked first; then the task is saved, followed by its actions, links, comment and files.
-  If anything fails, nothing is saved.
-- Notifications: same as today, plus "New action for you" to each action owner who is not the task owner
-  (the task owner already gets "New task for you").
-- Tooltips on every tab and button.
-
-## Part B. Repeating task with tabs (database change: ask-first item)
-The same tabs on the New / Edit repeating task panel:
+## Part A. Filters and drill-down for tasks
+**Filter bar** at the top of the dashboard. It changes cards, charts and the People table:
 
 ```
-[ Details ] [ Actions (2) ] [ Files & links (1) ] [ Comments (3) ]
+Company [All v]  Person [All v]  Category [All v]  Priority [All v]   [Clear]
 ```
 
-- **Actions**: same row editor as Part A, but "days before the due date" instead of a date (as today).
-  On an existing rule the current add/remove list moves into this tab.
-- **Files & links**: files are kept on the rule with core files (`FileAttachment`, no new table).
-  Links are kept in a **new table `RecurringLink`** (rule, name, web address).
-  Only people who can change the rule (owner, creator, owner's manager, admin) add or remove them;
-  collaborators can view and download.
-- **Comments**: a discussion about the rule itself, e.g. "Should we move this to day 10?".
-  **New table `RecurringComment`** (rule, text, who, when). Works like task comments: anyone who can see the rule
-  can write; the people on the rule get a bell. **Not copied** to the tasks. On the New form it is an optional
-  first comment. Tips every task should carry go in the rule's Description (already copied).
-- **What each new task gets** from its rule (in `_make_task`): its actions (as today), a link row for each rule
-  link, and a **copy of each rule file**.
-  - Why copy the files: a file can belong to only one record in core files, and the download check follows that
-    record. With a copy, everyone who can see the task can download it, and an old task keeps the file
-    it was done with even if the rule's file is changed later. Cost: one copy per task (e.g. a 1 MB template on a
-    monthly rule = 12 MB a year).
-- Changing a rule's files or links affects **future tasks only**. Tasks already made keep what they have (same as actions today).
-- On an **existing** task or rule, adding or removing an action, file, link or comment saves at once (as today).
-  Only the New forms save everything with one click.
-- One new migration: `RecurringLink` and `RecurringComment` tables. No old migration is edited.
+- Company: only the user's Tasks companies. Person: the people in the user's People table (task owner).
+  Category and Priority: as on tasks.
+- The filters live in the address, e.g. `/tasks/dashboard/?company=2&person=5`. Not saved anywhere.
+  Changing one reloads the page part with HTMX and updates the address.
+- A wrong or not-allowed value (e.g. a company that is not yours) is ignored, with a short message.
 
-## Rule change for actions (Parts A and B)
-- An action can't be due after its task: "Action due date can't be after the task's due date (25 Nov)."
-  Checked in `add_action` and the New task form. For rules: "days before" is 0 or more, so this is always true.
+**Drill-down:** every number is a link to the task list, and the filters go with it.
+- Cards: as today, plus the filters. Example: Company = Acme, click "Overdue" -> Acme's overdue tasks.
+- Chart bars: click "Blocked" -> blocked open tasks; click "GST" -> open GST tasks.
+- People table: Het's "Open" -> Het's open tasks, "Overdue" -> Het's overdue tasks,
+  "Done this month" -> Het's tasks completed this month.
+- The task list learns the same extra filters (`company`, `person`, and "open only" / "done this month"),
+  applied before the table's own filters. A small note on top of the list says what is applied, with a
+  "Show all" link to drop it.
 
-## Tests (`tests/test_tasks_create_tabs.py`, `tests/test_tasks_rule_tabs.py`)
-- New task: saves task + 2 actions + 1 link + 1 file + comment in one go; a bad action row → nothing
-  saved and the error is shown on the Actions tab; a file too big or of the wrong type → nothing saved; an
-  action owner from another company is refused; action owners get their notification.
-- New task: an action due after the task → refused with the message; same in the side panel.
-- Rule: new rule with actions, a link, a file and a comment in one go; the daily job makes a task that has the
-  actions, the link and its own copy of the file, but not the rule's comments; editing the rule changes only
-  later tasks; a collaborator cannot add or remove rule files/links but can download and comment; an outsider
-  cannot see, comment on, or download anything of the rule.
-- Outsider cannot see or download the task's files (existing rule, checked again).
+## Part B. Open actions
+**Open action** = not ticked done, on a task that is active and not completed, which the user may see.
+
+**4 new cards** (a second row, "Actions"):
+- Overdue actions, Due today, Next 7 days, My open actions (actions given to me).
+
+**People table:** 2 new columns, "Open actions" and "Overdue actions" (by the action's person).
+Example: Amar -> Open actions 3, Overdue actions 1.
+
+**New Actions list** (`/tasks/actions/`, also a tab next to Calendar), built with django-datatable:
+- Columns: Action, Task, Person, Due date, When (overdue / today / next 7 days / later). Search, sort, CSV.
+- Shortcuts: All, Due today, Next 7 days, Overdue, Mine.
+- Clicking a row opens that task's panel on the Actions tab, where it can be ticked done.
+- Every action number on the dashboard links here, with the filters. The Person filter means the
+  action's person (on tasks it means the task owner).
+
+## Tests (`tests/test_tasks_dashboard_t5.py`)
+- Each filter changes the cards, charts and People table; Clear brings all back.
+- A company or person the user may not see is ignored; outsiders' tasks/actions never count.
+- Drill-down links carry the filters, and the list shows exactly the counted tasks (count on card = rows in list).
+- Open actions: done actions, actions on completed tasks and on tasks the user can't see are not counted.
+- Actions list: shortcuts, row opens the panel on Actions, a user sees only actions on tasks they may see.
 
 ## Packages / database
-- No new package.
-- Database: Part B only, two new tables (`RecurringLink`, `RecurringComment`). Agreed 2026-11-17.
+- No new package. No database change.
 
 ## Decisions (agreed in grill-me, 2026-11-17)
-1. Tabs on both New forms; one click saves everything.
-2. Rule files are **copied** to each task (not shared).
-3. Rule comments = discussion on the rule only, not copied to tasks.
-4. An action can't be due after its task.
-5. On existing tasks/rules, tab changes save at once (as today).
-6. Only people who can change a rule add/remove its files and links.
+1. Open action = not done, on an open task the user may see.
+2. 4 action cards + 2 action columns in the People table.
+3. New Actions list + tab; a row opens the task panel on Actions.
+4. Every number on the dashboard is clickable (cards, chart bars, People table).
+5. Filters: Company, Person, Category, Priority; they go with every drill-down.
+6. Filters live in the address only; a Clear button resets them.
 7. 2 parts, stop for OK after each.
 
 ## Built differently from the plan (small)
-- Rule files: the "only people who can change the rule" check lives in the shared access layer
-  (`can_change_files`): a model can say `files_by_managers_only = True`. On such a record anyone who may change it
-  can also remove any of its files (not only the uploader).
-- Fixed on the way: the task panel's Files tab did not show the Upload form; the New task form's early
-  "action after the task" check compared with the wrong date (the save still caught it).
-- An action row whose person list is empty now says "pick who does it" instead of vanishing.
+- Person filter offers everyone who owns a task you may see (not only the People table), so a member can
+  also pick a colleague whose shared task they see.
+- A refused filter shows a yellow note on the page (not a pop-up message), so it is seen after an HTMX change.
+- After a filter change the address may hold empty filters, e.g. `?company=&priority=high`. Harmless.
 
 ## Finish
-`uv run pytest`, click through in the browser (create a task with all tabs, create a rule with all tabs, run
-"Create due tasks now", open the new task), `/code-review`, commit, set "Current phase" in `apps/tasks/CLAUDE.md`
-and the root `CLAUDE.md`.
+`uv run pytest`, click through in the browser (filters, each kind of drill-down, Actions list), `/code-review`,
+commit, set "Current phase" in `apps/tasks/CLAUDE.md` and the root `CLAUDE.md`.
