@@ -1,5 +1,5 @@
 """Tasks app (Phase T3, Part C): the 7:00 am email lists due today, overdue and waiting for review."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from django.core import mail
@@ -133,3 +133,16 @@ def test_setup_command_schedules_each_job_once():
     }
     email_job = Schedule.objects.get(name="tasks: daily email")
     assert (email_job.schedule_type, timezone.localtime(email_job.next_run).hour) == (Schedule.DAILY, 7)
+
+
+@pytest.mark.django_db
+def test_deploy_early_in_the_morning_keeps_todays_runs(monkeypatch):
+    real_localtime = timezone.localtime
+    early = timezone.make_aware(datetime(2026, 11, 17, 3, 0))
+    monkeypatch.setattr(timezone, "localtime", lambda *args: real_localtime(*args) if args else early)
+
+    call_command("setup_task_jobs")
+
+    runs = {name: real_localtime(run) for name, run in Schedule.objects.values_list("name", "next_run")}
+    assert runs["tasks: daily email"].date() == date(2026, 11, 17)
+    assert runs["tasks: create due tasks"].date() == date(2026, 11, 17)

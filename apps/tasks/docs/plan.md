@@ -1,5 +1,8 @@
 # Tasks: Phase T3 plan (Dashboard, Calendar, Daily email, Import)
 
+Status (2026-11-17): Parts A, B, C done and committed. Part D (import) skipped for now, by your choice;
+build it later when the CSV files from the old Sheet are ready.
+
 ## Context
 T1 (one-time tasks) and T2 (repeating rules, holidays) are done. T3 finishes the Tasks app scope in
 `apps/tasks/docs/project.md`: a Dashboard, a Calendar, the daily morning email, and the one-time import from
@@ -42,7 +45,7 @@ Everything counts only tasks the person may see: `visible_tasks(user)` in `apps/
 - Schedule: django-q2 daily at 7:00 am, added to the existing `setup_task_jobs` command (safe to run again).
 - One person's error is logged and does not stop the others.
 
-## Part D. Import from the old Sheet (when you share the CSV files)
+## Part D. Import from the old Sheet (SKIPPED for now: build when the CSV files are shared)
 - Management command `import_old_tasks <rules.csv> <tasks.csv> --company <code> [--commit]`.
   Default is **dry run**: reads everything, lists every error by row ("Row 14: owner 'amar@x' not found"),
   saves nothing. With `--commit`: all or nothing (one transaction).

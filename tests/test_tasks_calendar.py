@@ -175,3 +175,46 @@ def test_calendar_needs_tasks_app(client, people):
     no_app = get_user_model().objects.create_user(email="noapp@example.com", password="a-long-password-123")
     client.force_login(no_app)
     assert client.get("/tasks/calendar/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_open_tasks_come_before_completed_ones_in_a_day(people, acme):
+    done = [add(people, acme) for _ in range(3)]
+    Task.objects.filter(pk__in=[task.pk for task in done]).update(status=Task.Status.COMPLETED)
+    still_open = add(people, acme)
+
+    today_box = day_of(services.calendar_month(people["het"], 2026, 11, today=TODAY), TODAY)
+
+    assert today_box["tasks"][0] == still_open
+
+
+@pytest.mark.django_db
+def test_month_far_out_of_range_is_refused_not_a_crash(client, people, acme):
+    client.force_login(people["het"])
+
+    page = client.get("/tasks/calendar/?month=0001-01")
+
+    assert page.status_code == 200
+    assert "is not a month like 2026-11" in page.content.decode()
+
+
+@pytest.mark.django_db
+def test_back_button_history_restore_gets_the_whole_page(client, people, acme):
+    client.force_login(people["het"])
+
+    page = client.get(
+        "/tasks/calendar/?month=2026-12", headers={"HX-Request": "true", "HX-History-Restore-Request": "true"}
+    )
+
+    assert "<html" in page.content.decode()
+
+
+@pytest.mark.django_db
+def test_more_tasks_are_in_the_page_so_htmx_can_open_them(client, people, acme):
+    tasks = [add(people, acme, due=date(2026, 11, 20)) for _ in range(5)]
+    client.force_login(people["het"])
+
+    text = client.get("/tasks/calendar/?month=2026-11").content.decode()
+
+    assert all(f'hx-get="/tasks/{task.pk}/"' in text for task in tasks)
+    assert "<template" not in text

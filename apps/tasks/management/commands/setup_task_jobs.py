@@ -21,9 +21,12 @@ class Command(BaseCommand):
     help = "Schedule the daily Tasks jobs: repeating tasks at 6:00 am, the morning email at 7:00 am."
 
     def handle(self, *args, **options):
-        tomorrow = timezone.localdate() + timedelta(days=1)
+        now = timezone.localtime()
         for name, function, run_at in JOBS:
-            next_run = timezone.make_aware(datetime.combine(tomorrow, run_at))
+            # Today's run if its time has not come yet: a deploy at 3:00 am must not skip today's jobs.
+            next_run = timezone.make_aware(datetime.combine(now.date(), run_at))
+            if next_run <= now:
+                next_run += timedelta(days=1)
             _, created = Schedule.objects.update_or_create(
                 name=name, defaults={"func": function, "schedule_type": Schedule.DAILY, "next_run": next_run}
             )

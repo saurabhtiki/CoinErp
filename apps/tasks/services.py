@@ -187,30 +187,20 @@ def calendar_month(user, year, month, mine=False, today=None):
 
     rows = (my_tasks if mine else visible_tasks)(user).filter(due_date__range=(first, last))
     tasks_by_day = {}
-    for task in rows.order_by("due_date", "status", "number"):
+    for task in rows.order_by("due_date", "number"):
         task.is_overdue = task.status != Status.COMPLETED and task.due_date < today
         tasks_by_day.setdefault(task.due_date, []).append(task)
 
-    companies = list(companies_for_app(user, Task.access_app_code()).values_list("pk", flat=True))
-    saturdays = dict(OffDaySetting.objects.filter(company__in=companies).values_list("company_id", "off_saturdays"))
-    holiday_names, holiday_dates = {}, {company_id: set() for company_id in companies}
-    for company_id, day, name in Holiday.objects.filter(company__in=companies, date__range=(first, last)).values_list(
-        "company_id", "date", "name"
-    ):
-        holiday_dates[company_id].add(day)
-        holiday_names.setdefault(day, [])
-        if name not in holiday_names[day]:
+    companies = list(companies_for_app(user, Task.access_app_code()))
+    off_days = [off_days_of(company) for company in companies] or [schedule.OffDays()]
+    holiday_names = {}
+    for day, name in Holiday.objects.filter(company__in=companies, date__range=(first, last)).values_list("date", "name"):
+        if name not in holiday_names.setdefault(day, []):
             holiday_names[day].append(name)
-    off_days = [
-        schedule.OffDays(
-            saturdays=frozenset(saturdays.get(company_id) or default_off_saturdays()),
-            holidays=frozenset(holiday_dates[company_id]),
-        )
-        for company_id in companies
-    ] or [schedule.OffDays()]
 
     def day_box(day):
-        tasks = tasks_by_day.get(day, [])
+        # Open tasks first, so completed ones do not push open ones under "+N more".
+        tasks = sorted(tasks_by_day.get(day, []), key=lambda task: task.status == Status.COMPLETED)
         return {
             "date": day,
             "in_month": day.month == month,

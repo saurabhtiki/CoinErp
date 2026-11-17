@@ -46,6 +46,7 @@ SHORTCUTS = (
     ("Overdue", "due_group", "overdue", "Only tasks that are late"),
 )
 TABS = ("actions", "files", "comments")
+CALENDAR_YEARS = (2000, 2100)  # months outside this are refused (and the date maths stays safe)
 PEOPLE_COLUMNS = [
     Column("first_name", "Person"),
     Column("open_count", "Open", type=NUMBER),
@@ -116,19 +117,28 @@ class CalendarView(TasksView):
 
     def get(self, request):
         month_text = request.GET.get("month", "")
-        try:
-            month = datetime.strptime(month_text, "%Y-%m").date() if month_text else timezone.localdate().replace(day=1)
-        except ValueError:
-            logger.warning("Calendar: bad month %r from user %s", month_text, request.user.pk)
-            messages.error(request, f"'{month_text}' is not a month like 2026-11. Showing this month instead.")
-            month = timezone.localdate().replace(day=1)
+        month = timezone.localdate().replace(day=1)
+        if month_text:
+            try:
+                month = datetime.strptime(month_text, "%Y-%m").date()
+                if not CALENDAR_YEARS[0] <= month.year <= CALENDAR_YEARS[1]:
+                    raise ValueError("year out of range")
+            except ValueError:
+                logger.warning("Calendar: bad month %r from user %s", month_text, request.user.pk)
+                messages.error(
+                    request, f"'{month_text}' is not a month like 2026-11 (years {CALENDAR_YEARS[0]} to "
+                    f"{CALENDAR_YEARS[1]}). Showing this month instead."
+                )
+                month = timezone.localdate().replace(day=1)
         show = "mine" if request.GET.get("show") == "mine" else "all"
         context = {
             "title": "Calendar", "lists": LISTS, "tab": "calendar", "show": show,
             "calendar": services.calendar_month(request.user, month.year, month.month, mine=show == "mine"),
             "weekdays": [name[:3] for name in WEEKDAYS],
         }
-        template = "tasks/partials/calendar.html" if request.htmx else "tasks/calendar.html"
+        # The Back button may ask again for a pushed address (history restore): that needs the whole page.
+        only_grid = request.htmx and not request.htmx.history_restore_request
+        template = "tasks/partials/calendar.html" if only_grid else "tasks/calendar.html"
         return render(request, template, context)
 
 

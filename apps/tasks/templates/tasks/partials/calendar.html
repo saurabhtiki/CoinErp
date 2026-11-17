@@ -31,7 +31,7 @@
           <div class="space-y-0.5" x-data="{ open: false }">
             {% for task in day.tasks %}{% include "tasks/partials/calendar_task.html" %}{% endfor %}
             {% if day.more %}
-              <template x-if="open"><div class="space-y-0.5">{% for task in day.more %}{% include "tasks/partials/calendar_task.html" %}{% endfor %}</div></template>
+              <div class="space-y-0.5" x-show="open" style="display: none">{% for task in day.more %}{% include "tasks/partials/calendar_task.html" %}{% endfor %}</div>
               <button type="button" class="btn btn-ghost btn-xs w-full" x-on:click="open = !open"
                       title="Show or hide the other tasks of this day"
                       x-text="open ? 'Show less' : '+{{ day.more|length }} more'">+{{ day.more|length }} more</button>

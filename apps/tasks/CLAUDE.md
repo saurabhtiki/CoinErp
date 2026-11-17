@@ -2,4 +2,4 @@
 
 Scope: `docs/project.md`. Plan of the current phase: `docs/plan.md`.
 
-Current phase: T1 Tasks basics and T2 Repeating tasks done and committed; next: T3 Dashboard.
+Current phase: T1, T2 and T3 (dashboard, calendar, 7 am email) done; Sheet import (T3 Part D) postponed until the CSV files are shared.
