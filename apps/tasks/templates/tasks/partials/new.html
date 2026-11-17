@@ -65,6 +65,7 @@
           <button type="button" class="btn btn-ghost btn-xs text-error sm:order-last" @click="actions.splice(index, 1)"
                   title="Remove this action" :aria-label="'Remove action ' + (index + 1)">✕</button>
           <select name="action_owner" x-model="row.owner" class="select select-sm w-full" title="Who does this action">
+            <option value="">Pick a person</option>
             {% for person in people %}<option value="{{ person.pk }}">{{ person.get_full_name|default:person.email }}</option>{% endfor %}
           </select>
           <input type="date" name="action_due_date" x-model="row.due_date" class="input input-sm w-full"

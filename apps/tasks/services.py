@@ -29,7 +29,7 @@ from core.access.services import (
     team_rows,
     users_for_app,
 )
-from core.files.services import attach
+from core.files.services import attach, attachments_for, copy_attachment
 from core.files.validators import validate_attachment
 from core.masters.models import Company
 from core.notifications.models import NotificationLog
@@ -40,6 +40,8 @@ from .models import (
     Holiday,
     OffDaySetting,
     RecurringAction,
+    RecurringComment,
+    RecurringLink,
     RecurringTask,
     Task,
     TaskAction,
@@ -310,13 +312,20 @@ def _people_on(task):
     return people
 
 
+def record_link(record):
+    """Where a bell opens: the task, or the repeating rule."""
+    if isinstance(record, RecurringTask):
+        return reverse("tasks:rule", args=[record.pk])
+    return task_link(record)
+
+
 def _tell(users, actor, task, title, message="", channels=None):
-    """Notify each user once, never the person who did the action."""
+    """Notify each user once, never the person who did the action. `task` may also be a repeating rule."""
     for user in {person for person in users if person and person.pk != actor.pk}:
         if channels:
-            notify(user, title, message, channels=channels, link=task_link(task))
+            notify(user, title, message, channels=channels, link=record_link(task))
         else:
-            notify(user, title, message, link=task_link(task))
+            notify(user, title, message, link=record_link(task))
 
 
 def _day(value):
@@ -342,9 +351,10 @@ def _check_action_due(action_due, task_due):
     return ""
 
 
-def task_part_problems(company, due_date, actions, links, files):
-    """Check the rows of the New task tabs before anything is saved. Returns {"actions": [...], ...}.
-    due_date None (not filled in yet): the "not after the task" check waits until it is.
+def part_problems(company, actions, links, files, due_date=None):
+    """Check the rows of the New task / New repeating task tabs before anything is saved.
+    Returns {"actions": [...], ...}. due_date: the task's; None (a rule, or not filled in yet) skips the
+    "not after the task" check.
 
     Example: {"actions": ["Action 2: Action due date can't be after the task's due date (20 Nov 2026)."]}
     """
@@ -355,7 +365,7 @@ def task_part_problems(company, due_date, actions, links, files):
             problems["actions"].append(f"Action {number}: write what has to be done.")
         if action["owner"].pk not in people:
             problems["actions"].append(f"Action {number}: pick someone who works in {company} and can open Tasks.")
-        if due_date and (late := _check_action_due(action["due_date"], due_date)):
+        if due_date and "due_date" in action and (late := _check_action_due(action["due_date"], due_date)):
             problems["actions"].append(f"Action {number}: {late}")
     for number, link in enumerate(links, 1):
         try:
@@ -383,7 +393,7 @@ def create_task(user, company, *, title, owner, due_date, category=None, priorit
     _check_people(company, owner=owner, reviewer=reviewer, collaborators=collaborators)
     if category is not None and category.company_id != company.pk:
         _refuse({"category": f"Pick a category of {company}."})
-    if problems := task_part_problems(company, due_date, actions, links, files):
+    if problems := part_problems(company, actions, links, files, due_date):
         _refuse(problems)
     task = _new_task(
         company, user, collaborators, title=title, description=description, owner=owner, reviewer=reviewer,
@@ -668,11 +678,16 @@ def _check_schedule(rule):
 
 
 @transaction.atomic
-def save_rule(user, company, rule=None, *, collaborators=(), **fields):
+def save_rule(user, company, rule=None, *, collaborators=(), actions=(), links=(), files=(), first_comment="",
+              **fields):
     """Make or change a repeating rule. Tasks already made are never touched.
 
     Example: save_rule(saurabh, acme, title="GSTR1", owner=het, frequency="monthly", due_day=11,
                        due_in_next_period=True)
+    The New form also sends the rows of its tabs, all saved or none:
+    actions: [{"title": "Send data to CA", "owner": amar, "days_before_due": 3}]
+    links:   [{"label": "GST sheet", "url": "https://..."}]
+    files:   uploaded files (copied to every task the rule makes)
     """
     fields = {name: value for name, value in fields.items() if name in RULE_FIELDS}
     is_new = rule is None
@@ -690,12 +705,28 @@ def save_rule(user, company, rule=None, *, collaborators=(), **fields):
     if rule.category is not None and rule.category.company_id != rule.company_id:
         _refuse({"category": f"Pick a category of {rule.company}."})
     _check_schedule(rule)
+    if problems := part_problems(rule.company, actions, links, files):
+        _refuse(problems)
     if not is_new and old_schedule != [getattr(rule, name) for name in (*SCHEDULE_FIELDS, "start_date")]:
         # a new timing counts from today: it must not fill the past with tasks under the new timing.
         # The start date stays: it also fixes where the periods begin (e.g. which months make a quarter).
         rule.skip_before = timezone.localdate()
     rule.save()
     rule.collaborators.set(collaborators)
+    RecurringAction.objects.bulk_create(
+        RecurringAction(recurring_task=rule, title=action["title"].strip(), owner=action["owner"],
+                        days_before_due=action["days_before_due"])
+        for action in actions
+    )
+    RecurringLink.objects.bulk_create(
+        RecurringLink(recurring_task=rule, created_by=user, label=link["label"].strip() or link["url"].strip(),
+                      url=link["url"].strip())
+        for link in links
+    )
+    if first_comment.strip():
+        RecurringComment.objects.create(recurring_task=rule, created_by=user, text=first_comment.strip())
+    for uploaded in files:  # last: the files are already checked, and a file on disk can't be rolled back
+        attach(rule, uploaded, user)
     return rule
 
 
@@ -722,6 +753,34 @@ def add_rule_action(user, rule, title, owner, days_before_due=0):
 def remove_rule_action(user, action):
     _require(can_manage(user, action.recurring_task), RULE_MANAGERS)
     action.delete()
+
+
+def add_rule_link(user, rule, label, url):
+    """Copied to every future task of the rule. Only people who may change the rule add one."""
+    _require(can_manage(user, rule), RULE_MANAGERS)
+    link = RecurringLink(recurring_task=rule, created_by=user, label=label.strip() or url.strip(), url=url.strip())
+    try:
+        link.full_clean(exclude=["recurring_task"])  # a clear error for a bad web address
+    except ValidationError as error:
+        _refuse(error.message_dict)
+    link.save()
+    return link
+
+
+def remove_rule_link(user, link):
+    _require(can_manage(user, link.recurring_task), RULE_MANAGERS)
+    link.delete()
+
+
+def add_rule_comment(user, rule, text):
+    """Discussion about the rule. Anyone who can see the rule writes; the people on it get a bell."""
+    _require(can_see_record(user, rule), "You cannot comment on this repeating task.")
+    if not text.strip():
+        _refuse("Write something before posting the comment.")
+    comment = RecurringComment.objects.create(recurring_task=rule, created_by=user, text=text.strip())
+    _tell(_people_on(rule), user, rule, f"New comment on repeating task: {rule.title}", comment.text[:200],
+          channels=BELL_ONLY)
+    return comment
 
 
 def upcoming(rule, off_days, count=3, today=None):
@@ -781,6 +840,15 @@ def _make_task(rule, period):
         )
         for action in rule.actions.all()
     )
+    TaskLink.objects.bulk_create(
+        TaskLink(task=task, created_by=rule.created_by, label=link.label, url=link.url) for link in rule.links.all()
+    )
+    for attachment in attachments_for(rule):  # each task gets its own copy: it keeps the file it was done with
+        try:
+            copy_attachment(attachment, task)
+        except OSError:
+            logger.exception("File %r of repeating task %s could not be copied to %s", attachment.original_name,
+                             rule.pk, task.code)
     notify(  # bell only: a daily rule must not send a mail every day
         rule.owner, f"New task for you: {task.title}", f"{task.code}, due {_day(period.due)}.",
         channels=BELL_ONLY, link=task_link(task),

@@ -29,6 +29,9 @@ urlpatterns = [
     path("repeating/<int:pk>/pause/", rule_views.RulePauseView.as_view(), name="rule_pause"),
     path("repeating/<int:pk>/actions/", rule_views.RuleActionAddView.as_view(), name="rule_action_add"),
     path("repeating/actions/<int:pk>/remove/", rule_views.RuleActionRemoveView.as_view(), name="rule_action_remove"),
+    path("repeating/<int:pk>/links/", rule_views.RuleLinkAddView.as_view(), name="rule_link_add"),
+    path("repeating/links/<int:pk>/remove/", rule_views.RuleLinkRemoveView.as_view(), name="rule_link_remove"),
+    path("repeating/<int:pk>/comments/", rule_views.RuleCommentView.as_view(), name="rule_comment"),
     # holidays and off Saturdays
     path("holidays/", rule_views.HolidayListView.as_view(), name="holidays"),
     path("holidays/saturdays/", rule_views.SaturdaysView.as_view(), name="saturdays"),

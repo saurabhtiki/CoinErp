@@ -1,0 +1,28 @@
+{# The fields of a repeating rule, with the live preview of its dates. Used inside the Details tab. #}
+{% if form.non_field_errors %}
+  <div role="alert" class="alert alert-error alert-soft text-sm mb-2">{% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}</div>
+{% endif %}
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+  {% for field in form %}{% if field.name != "comment" %}
+  <fieldset class="fieldset{% if field.name in 'title collaborators description' %} sm:col-span-2{% endif %}"
+    {% if field.name == 'weekday' %}x-show="frequency === 'weekly'" x-cloak
+    {% elif field.name == 'due_day' %}x-show="frequency === 'monthly' || frequency === 'yearly'" x-cloak
+    {% elif field.name == 'due_month' %}x-show="frequency === 'yearly'" x-cloak
+    {% elif field.name == 'due_in_next_period' or field.name == 'off_day_rule' %}x-show="frequency !== 'daily'" x-cloak{% endif %}>
+    <legend class="fieldset-legend"{% if field.help_text %} title="{{ field.help_text }}"{% endif %}>{{ field.label }}</legend>
+    {% if field.name == "collaborators" %}
+      <div class="text-sm [&>div]:flex [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-1 [&_label]:flex [&_label]:items-center [&_label]:gap-1 [&_label]:cursor-pointer">{{ field }}</div>
+    {% elif field.name == "due_in_next_period" %}
+      <label class="flex items-center gap-2 cursor-pointer text-sm">{{ field }} Yes</label>
+    {% else %}
+      {{ field }}
+    {% endif %}
+    {% for error in field.errors %}<p class="label text-error whitespace-normal">{{ error }}</p>{% endfor %}
+    {% if field.help_text %}<p class="label whitespace-normal">{{ field.help_text }}</p>{% endif %}
+  </fieldset>
+  {% if field.name == "end_date" %}
+    <div class="sm:col-span-2 alert alert-info alert-soft text-sm my-2" title="The dates of the next tasks this rule will make. It changes as you change the fields."
+         {% if can_manage %}hx-post="{% url 'tasks:rule_preview' %}" hx-trigger="load, change from:closest form delay:150ms" hx-include="closest form" hx-target="this" hx-swap="innerHTML"{% endif %}>{{ preview|default:"Working out the dates…" }}</div>
+  {% endif %}
+  {% endif %}{% endfor %}
+</div>

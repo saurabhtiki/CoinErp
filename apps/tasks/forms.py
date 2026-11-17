@@ -88,19 +88,26 @@ def posted_rows(data, prefix, names, filled):
     return [row for row in rows if any(row[name].strip() for name in filled)]
 
 
-class NewTaskParts:
-    """The Actions and Files & links tabs of the New task form. The service checks the rules;
-    this only turns the posted text into people and dates."""
+class NewParts:
+    """The Actions and Files & links tabs of a New form. The service checks the rules;
+    this only turns the posted text into people and numbers. WHEN is the action's "when" column."""
 
     TABS = ("actions", "links", "files")
+    WHEN = "due_date"
+    WHEN_MISSING = "pick a due date."
 
     def __init__(self, data=None, files=None, *, company):
         self.company = company
-        self.action_rows = posted_rows(data, "action", ("title", "owner", "due_date"), ("title",)) if data else []
+        self.action_rows = posted_rows(data, "action", ("title", "owner", self.WHEN), ("title",)) if data else []
         self.link_rows = posted_rows(data, "link", ("label", "url"), ("label", "url")) if data else []
         self.files = files.getlist("files") if files else []
         self.errors = {}
         self.actions, self.links = [], [dict(row) for row in self.link_rows]
+
+    @staticmethod
+    def parse_when(text):
+        """The posted "when" of one action, or None if it is missing or wrong."""
+        raise NotImplementedError
 
     def is_valid(self, due_date=None):
         """Check every row now, so all tabs show their errors together. `due_date`: the task's, if valid."""
@@ -108,19 +115,16 @@ class NewTaskParts:
         problems = []
         for number, row in enumerate(self.action_rows, 1):
             owner = people.get(row["owner"])
-            try:
-                due_date = date.fromisoformat(row["due_date"])
-            except ValueError:
-                due_date = None
+            when = self.parse_when(row[self.WHEN])
             if owner is None:
                 problems.append(f"Action {number}: pick who does it.")
-            if due_date is None:
-                problems.append(f"Action {number}: pick a due date.")
-            if owner and due_date:
-                self.actions.append({"title": row["title"], "owner": owner, "due_date": due_date})
+            if when is None:
+                problems.append(f"Action {number}: {self.WHEN_MISSING}")
+            if owner and when is not None:
+                self.actions.append({"title": row["title"], "owner": owner, self.WHEN: when})
         if problems:
             self.errors["actions"] = problems
-        found = services.task_part_problems(self.company, due_date, self.actions, self.links, self.files)
+        found = services.part_problems(self.company, self.actions, self.links, self.files, due_date)
         for tab, messages in found.items():
             self.errors.setdefault(tab, []).extend(messages)
         return not self.errors
@@ -136,6 +140,32 @@ class NewTaskParts:
             else:
                 rest[field] = messages
         return ValidationError(rest) if rest else None
+
+
+class NewTaskParts(NewParts):
+    """Example row: action_title="Send data", action_owner="5", action_due_date="2026-11-18"."""
+
+    @staticmethod
+    def parse_when(text):
+        try:
+            return date.fromisoformat(text)
+        except ValueError:
+            return None
+
+
+class NewRuleParts(NewParts):
+    """Example row: action_title="Send data", action_owner="5", action_days_before_due="3"."""
+
+    WHEN = "days_before_due"
+    WHEN_MISSING = "days before the due date must be a whole number from 0 to 365."
+
+    @staticmethod
+    def parse_when(text):
+        try:
+            days = int(text)
+        except ValueError:
+            return None
+        return days if 0 <= days <= 365 else None
 
 
 def task_initial(task):
@@ -199,12 +229,17 @@ class RuleForm(forms.Form):
     end_date = forms.DateField(label="Stop after (optional)", required=False, widget=date_input())
     collaborators = PeopleField(queryset=None, required=False, widget=forms.CheckboxSelectMultiple,
                                 help_text="Copied to every task of this rule.")
-    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": TEXTAREA, "rows": 3}))
+    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": TEXTAREA, "rows": 3}),
+                                  help_text="Copied to every task. Put the tips every task should carry here.")
+    comment = forms.CharField(label="First comment (optional)", required=False,
+                              widget=forms.Textarea(attrs={"class": TEXTAREA, "rows": 2}))
 
     add_service_errors = TaskForm.add_service_errors
 
-    def __init__(self, *args, company, read_only=False, **kwargs):
+    def __init__(self, *args, company, is_new=False, read_only=False, **kwargs):
         super().__init__(*args, **kwargs)
+        if not is_new:
+            del self.fields["comment"]
         people = services.people_of(company)
         for name in ("owner", "reviewer", "collaborators"):
             self.fields[name].queryset = people

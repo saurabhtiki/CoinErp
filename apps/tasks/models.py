@@ -84,6 +84,10 @@ class RecurringTask(BaseModel):
         help_text="Set when the timing is changed: no task with an earlier due date is made any more.",
     )
 
+    # Its files are copied to every task it makes, so only people who may change the rule add or remove them.
+    files_by_managers_only = True
+    files_locked_text = "Only the owner, the creator or their manager can add or remove files of a repeating task."
+
     class Meta(BaseModel.Meta):
         ordering = ["title"]
 
@@ -111,6 +115,45 @@ class RecurringAction(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class RecurringPart(models.Model):
+    """Base for the small things kept on a repeating rule: who added it and when."""
+
+    recurring_task = models.ForeignKey(RecurringTask, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+", editable=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+        ordering = ["created_at", "pk"]
+
+
+class RecurringLink(RecurringPart):
+    """A web link copied to every task of a rule. Example: "GST sheet", a Google Drive address."""
+
+    label = models.CharField(max_length=200)
+    url = models.URLField(max_length=500)
+
+    class Meta(RecurringPart.Meta):
+        default_related_name = "links"
+
+    def __str__(self):
+        return self.label
+
+
+class RecurringComment(RecurringPart):
+    """Discussion about the rule itself, e.g. "Should we move this to day 10?". Not copied to the tasks."""
+
+    text = models.TextField()
+
+    class Meta(RecurringPart.Meta):
+        default_related_name = "comments"
+
+    def __str__(self):
+        return self.text[:50]
 
 
 class Holiday(BaseModel):

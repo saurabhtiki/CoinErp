@@ -1,6 +1,6 @@
 # Tasks: Phase T4 plan (Add actions, files and comments while creating)
 
-Status (2026-11-17): Part A done and committed. Part B next, after your OK.
+Status (2026-11-17): T4 done. Part A and Part B built, tested and committed.
 Still open from T3: Part D (import from the old Sheet), to be built when the CSV files are shared.
 
 ## Context
@@ -90,6 +90,14 @@ The same tabs on the New / Edit repeating task panel:
 5. On existing tasks/rules, tab changes save at once (as today).
 6. Only people who can change a rule add/remove its files and links.
 7. 2 parts, stop for OK after each.
+
+## Built differently from the plan (small)
+- Rule files: the "only people who can change the rule" check lives in the shared access layer
+  (`can_change_files`): a model can say `files_by_managers_only = True`. On such a record anyone who may change it
+  can also remove any of its files (not only the uploader).
+- Fixed on the way: the task panel's Files tab did not show the Upload form; the New task form's early
+  "action after the task" check compared with the wrong date (the save still caught it).
+- An action row whose person list is empty now says "pick who does it" instead of vanishing.
 
 ## Finish
 `uv run pytest`, click through in the browser (create a task with all tabs, create a rule with all tabs, run

@@ -40,7 +40,10 @@ def attach(record, uploaded_file, user):
         raise PermissionDenied("You cannot add files to this record.")
     if not can_change_files(user, record):
         logger.info("Refused upload to locked %s #%s", record._meta.label, record.pk)
-        raise ValidationError("This record is waiting for approval or already approved, so its files cannot change.")
+        raise ValidationError(getattr(
+            record, "files_locked_text",
+            "This record is waiting for approval or already approved, so its files cannot change.",
+        ))
     if uploaded_file is None:
         logger.info("Upload to %s #%s without a file", record._meta.label, record.pk)
         raise ValidationError("Choose a file first.")
@@ -55,6 +58,21 @@ def attach(record, uploaded_file, user):
     attachment.save()
     logger.info("User %s attached %r to %s #%s", user.pk, attachment.original_name, record._meta.label, record.pk)
     return attachment
+
+
+def copy_attachment(attachment, record):
+    """Give another record its own copy of a file. Example: a repeating rule's template copied to each new task.
+
+    No user check: it is called by an app's own job after its rules are checked. Raises OSError if the
+    file is missing on disk.
+    """
+    copy = FileAttachment(
+        record=record, original_name=attachment.original_name, size=attachment.size, uploaded_by=attachment.uploaded_by
+    )
+    with attachment.file.open("rb"):
+        copy.file.save(attachment.original_name, attachment.file, save=False)  # gets its own random stored name
+    copy.save()
+    return copy
 
 
 def can_remove(attachment, user):

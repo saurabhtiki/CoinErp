@@ -32,7 +32,7 @@
       <button class="btn btn-primary btn-sm mb-6" title="Upload the chosen file">Upload</button>
     </form>
     {% else %}
-      <p class="text-sm text-base-content/70">Files cannot be added or removed while this record waits for approval or once it is approved.</p>
+      <p class="text-sm text-base-content/70">{{ record.files_locked_text|default:"Files cannot be added or removed while this record waits for approval or once it is approved." }}</p>
     {% endif %}
   </div>
 </section>

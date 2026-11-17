@@ -1,13 +1,34 @@
 {% if not as_page %}<a href="{{ close_url }}" class="fixed inset-0 z-40 bg-black/40" aria-label="Close" title="Close"></a>{% endif %}
+{% if not rule %}
+  {{ parts.action_rows|json_script:"new-rule-actions" }}
+  {{ parts.link_rows|json_script:"new-rule-links" }}
+{% endif %}
 <aside class="{% if as_page %}card bg-base-100 shadow-sm max-w-3xl p-5{% else %}fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto bg-base-100 shadow-xl p-5{% endif %}"
-       hx-target="#task-panel" hx-swap="innerHTML" x-data="{ frequency: '{{ frequency }}' }">
+       hx-target="#task-panel" hx-swap="innerHTML"
+       x-data="{
+         frequency: '{{ frequency }}',
+         tab: '{{ tab }}',
+         nextKey: 1,
+         actions: [],
+         links: [],
+         fileCount: 0,
+         init() {
+           const saved = (id) => document.getElementById(id) ? JSON.parse(document.getElementById(id).textContent) : [];
+           this.actions = saved('new-rule-actions').map(row => ({ ...row, key: this.nextKey++ }));
+           this.links = saved('new-rule-links').map(row => ({ ...row, key: this.nextKey++ }));
+         },
+         addAction() {
+           const form = this.$root.querySelector('form');
+           this.actions.push({ key: this.nextKey++, title: '', owner: form.owner.value, days_before_due: '0' });
+         },
+       }">
   <div class="flex items-center gap-2 mb-1">
     <h2 class="text-lg font-bold flex-1">{% if rule %}Repeating task{% else %}New repeating task{% endif %}</h2>
     {% if rule %}
       <span class="badge {% if rule.is_paused %}badge-warning{% else %}badge-success{% endif %} badge-soft">{% if rule.is_paused %}Paused{% else %}Active{% endif %}</span>
       <a href="{% url 'audit:record' 'tasks' 'recurringtask' rule.pk %}" class="btn btn-ghost btn-sm" title="Who changed this repeating task, and when">History</a>
     {% endif %}
-    <a href="{{ close_url }}" class="btn btn-ghost btn-sm" title="Go back to the list">Close</a>
+    <a href="{{ close_url }}" class="btn btn-ghost btn-sm" title="{% if rule %}Go back to the list{% else %}Close without saving{% endif %}">Close</a>
   </div>
   {% if rule %}
     <p class="text-sm text-base-content/70 mb-2">{{ rule.company }}. {{ repeats_text }}. Created by {{ rule.created_by.get_full_name|default:rule.created_by|default:"someone" }} on {{ rule.created_at|date:"d-m-Y" }}.</p>
@@ -17,89 +38,110 @@
 
   {% if panel_error %}<div role="alert" class="alert alert-error alert-soft text-sm mb-2">{{ panel_error }}</div>{% endif %}
   {% if not can_manage %}
-    <div role="alert" class="alert alert-info alert-soft text-sm mb-2">You can view this repeating task. Only the owner, the creator or their manager can change it.</div>
+    <div role="alert" class="alert alert-info alert-soft text-sm mb-2">You can view this repeating task and comment on it. Only the owner, the creator or their manager can change it.</div>
   {% endif %}
 
-  <form hx-post="{% if rule %}{% url 'tasks:rule' rule.pk %}{% else %}{% url 'tasks:rule_new' %}{% endif %}">
-    {% if companies %}
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend">Company</legend>
-        <select name="company" class="select select-sm w-full" hx-get="{% url 'tasks:rule_new' %}" hx-include="closest form"
-                title="The repeating task and its people belong to this company">
-          {% for item in companies %}<option value="{{ item.pk }}"{% if item.pk == company.pk %} selected{% endif %}>{{ item }}</option>{% endfor %}
-        </select>
-      </fieldset>
-    {% else %}
-      <input type="hidden" name="company" value="{{ company.pk }}">
-    {% endif %}
-    {% if rule %}<input type="hidden" name="saved" value="1">{% endif %}
-    {% if form.non_field_errors %}
-      <div role="alert" class="alert alert-error alert-soft text-sm mb-2">{% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}</div>
-    {% endif %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-      {% for field in form %}
-      <fieldset class="fieldset{% if field.name in 'title collaborators description' %} sm:col-span-2{% endif %}"
-        {% if field.name == 'weekday' %}x-show="frequency === 'weekly'" x-cloak
-        {% elif field.name == 'due_day' %}x-show="frequency === 'monthly' || frequency === 'yearly'" x-cloak
-        {% elif field.name == 'due_month' %}x-show="frequency === 'yearly'" x-cloak
-        {% elif field.name == 'due_in_next_period' or field.name == 'off_day_rule' %}x-show="frequency !== 'daily'" x-cloak{% endif %}>
-        <legend class="fieldset-legend"{% if field.help_text %} title="{{ field.help_text }}"{% endif %}>{{ field.label }}</legend>
-        {% if field.name == "collaborators" %}
-          <div class="text-sm [&>div]:flex [&>div]:flex-wrap [&>div]:gap-x-4 [&>div]:gap-y-1 [&_label]:flex [&_label]:items-center [&_label]:gap-1 [&_label]:cursor-pointer">{{ field }}</div>
-        {% elif field.name == "due_in_next_period" %}
-          <label class="flex items-center gap-2 cursor-pointer text-sm">{{ field }} Yes</label>
-        {% else %}
-          {{ field }}
-        {% endif %}
-        {% for error in field.errors %}<p class="label text-error whitespace-normal">{{ error }}</p>{% endfor %}
-        {% if field.help_text %}<p class="label whitespace-normal">{{ field.help_text }}</p>{% endif %}
-      </fieldset>
-      {% if field.name == "end_date" %}
-        <div class="sm:col-span-2 alert alert-info alert-soft text-sm my-2" title="The dates of the next tasks this rule will make. It changes as you change the fields."
-             {% if can_manage %}hx-post="{% url 'tasks:rule_preview' %}" hx-trigger="load, change from:closest form delay:150ms" hx-include="closest form" hx-target="this" hx-swap="innerHTML"{% endif %}>{{ preview|default:"Working out the dates…" }}</div>
-      {% endif %}
-      {% endfor %}
-    </div>
-    <div class="flex flex-wrap gap-2 mt-2">
-      {% if can_manage %}
-        <button class="btn btn-primary btn-sm" title="{% if rule %}Save the changes. Tasks already made are not changed.{% else %}Save the repeating task. Its tasks will be made by the daily job.{% endif %}">{% if rule %}Save changes{% else %}Create repeating task{% endif %}</button>
-        {% if rule %}
-          <button type="button" class="btn btn-sm" hx-post="{% url 'tasks:rule_pause' rule.pk %}"
-                  title="{% if rule.is_paused %}Start making tasks again{% else %}Stop making new tasks. Tasks already made stay as they are.{% endif %}">{% if rule.is_paused %}Resume{% else %}Pause{% endif %}</button>
-        {% endif %}
-      {% endif %}
-    </div>
-  </form>
-
   {% if rule %}
-    <h3 class="font-medium mt-5 mb-1" title="These small steps are copied to every task of this rule">Actions copied to every task ({{ actions|length }})</h3>
-    {% if actions %}
-      <ul class="list">
-        {% for action in actions %}
-          <li class="list-row items-center py-2">
-            <div class="min-w-0">
-              <div>{{ action.title }}</div>
-              <div class="text-xs text-base-content/70">{{ action.owner.get_full_name|default:action.owner }}, {% if action.days_before_due %}{{ action.days_before_due }} day{{ action.days_before_due|pluralize }} before the due date{% else %}on the due date{% endif %}</div>
-            </div>
-            {% if can_manage %}
-              <button class="btn btn-ghost btn-xs text-error" hx-post="{% url 'tasks:rule_action_remove' action.pk %}"
-                      hx-confirm="Remove the action '{{ action.title }}'? Tasks already made keep it." title="Remove this action from future tasks">Remove</button>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="text-sm text-base-content/70">No actions yet.</p>
-    {% endif %}
-    {% if can_manage %}
-      <form hx-post="{% url 'tasks:rule_action_add' rule.pk %}" class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
-        <div class="sm:col-span-3">{{ action_form.title }}{% for error in action_form.title.errors %}<p class="label text-error">{{ error }}</p>{% endfor %}</div>
-        <div title="Who does this action">{{ action_form.owner }}</div>
-        <label class="flex items-center gap-2 text-sm" title="Days before the task's due date. 0 = on the due date.">{{ action_form.days_before_due }}<span class="whitespace-nowrap">days before</span></label>
-        <button class="btn btn-sm" title="Add this small step to every future task of this rule">Add action</button>
-        {% for error in action_form.days_before_due.errors %}<p class="label text-error sm:col-span-3">{{ error }}</p>{% endfor %}
+    {# A saved rule: each tab saves its own change at once. #}
+    <div role="tablist" class="tabs tabs-border mb-3">
+      <button type="button" role="tab" class="tab" :class="tab === 'details' && 'tab-active'" @click="tab = 'details'" title="Title, owner, when it repeats and the other fields">Details</button>
+      <button type="button" role="tab" class="tab" :class="tab === 'actions' && 'tab-active'" @click="tab = 'actions'" title="Small steps copied to every new task of this rule">Actions ({{ actions|length }})</button>
+      <button type="button" role="tab" class="tab" :class="tab === 'files' && 'tab-active'" @click="tab = 'files'" title="Files and web links copied to every new task of this rule">Files &amp; links ({{ files_count }})</button>
+      <button type="button" role="tab" class="tab" :class="tab === 'comment' && 'tab-active'" @click="tab = 'comment'" title="Discussion about this rule. Not copied to the tasks.">Comments ({{ comments|length }})</button>
+    </div>
+
+    <div x-show="tab === 'details'">
+      <form hx-post="{% url 'tasks:rule' rule.pk %}">
+        <input type="hidden" name="company" value="{{ company.pk }}">
+        <input type="hidden" name="saved" value="1">
+        {% include "tasks/partials/rule_fields.html" %}
+        <div class="flex flex-wrap gap-2 mt-2">
+          {% if can_manage %}
+            <button class="btn btn-primary btn-sm" title="Save the changes. Tasks already made are not changed.">Save changes</button>
+            <button type="button" class="btn btn-sm" hx-post="{% url 'tasks:rule_pause' rule.pk %}"
+                    title="{% if rule.is_paused %}Start making tasks again{% else %}Stop making new tasks. Tasks already made stay as they are.{% endif %}">{% if rule.is_paused %}Resume{% else %}Pause{% endif %}</button>
+          {% endif %}
+        </div>
       </form>
-    {% endif %}
+    </div>
+
+    <div x-show="tab === 'actions'" x-cloak>
+      <p class="text-sm text-base-content/70 mb-1">Copied to every new task. Tasks already made keep what they have.</p>
+      {% if actions %}
+        <ul class="list">
+          {% for action in actions %}
+            <li class="list-row items-center py-2">
+              <div class="min-w-0">
+                <div>{{ action.title }}</div>
+                <div class="text-xs text-base-content/70">{{ action.owner.get_full_name|default:action.owner }}, {% if action.days_before_due %}{{ action.days_before_due }} day{{ action.days_before_due|pluralize }} before the due date{% else %}on the due date{% endif %}</div>
+              </div>
+              {% if can_manage %}
+                <button class="btn btn-ghost btn-xs text-error" hx-post="{% url 'tasks:rule_action_remove' action.pk %}"
+                        hx-confirm="Remove the action '{{ action.title }}'? Tasks already made keep it." title="Remove this action from future tasks">Remove</button>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-sm text-base-content/70">No actions yet.</p>
+      {% endif %}
+      {% if can_manage %}
+        <form hx-post="{% url 'tasks:rule_action_add' rule.pk %}" class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+          <div class="sm:col-span-3">{{ action_form.title }}{% for error in action_form.title.errors %}<p class="label text-error">{{ error }}</p>{% endfor %}</div>
+          <div title="Who does this action">{{ action_form.owner }}</div>
+          <label class="flex items-center gap-2 text-sm" title="Days before the task's due date. 0 = on the due date.">{{ action_form.days_before_due }}<span class="whitespace-nowrap">days before</span></label>
+          <button class="btn btn-sm" title="Add this small step to every future task of this rule">Add action</button>
+          {% for error in action_form.days_before_due.errors %}<p class="label text-error sm:col-span-3">{{ error }}</p>{% endfor %}
+        </form>
+      {% endif %}
+    </div>
+
+    <div x-show="tab === 'files'" x-cloak>
+      <p class="text-sm text-base-content/70 mb-2">Each new task gets its own copy of these files and links. Tasks already made keep what they have.</p>
+      {% include "files/partials/panel.html" with error="" %}
+      <h3 class="font-medium mt-4 mb-1">Links</h3>
+      {% if links %}
+        <ul class="list">
+          {% for link in links %}
+            <li class="list-row items-center py-2">
+              <div class="min-w-0">
+                <a href="{{ link.url }}" class="link link-primary break-all" target="_blank" rel="noopener noreferrer" title="Open {{ link.url }} in a new tab">{{ link.label }}</a>
+                <div class="text-xs text-base-content/70">{{ link.created_by.get_full_name|default:link.created_by|default:"Unknown" }}, {{ link.created_at|date:"d-m-Y H:i" }}</div>
+              </div>
+              {% if can_manage %}
+                <button class="btn btn-ghost btn-xs text-error" hx-post="{% url 'tasks:rule_link_remove' link.pk %}"
+                        hx-confirm="Remove the link '{{ link.label }}'? Tasks already made keep it." title="Remove this link from future tasks">Remove</button>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-sm text-base-content/70">No links yet.</p>
+      {% endif %}
+      {% if can_manage %}
+        <form hx-post="{% url 'tasks:rule_link_add' rule.pk %}" class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+          <input name="label" class="input input-sm w-full" placeholder="Name" aria-label="Link name" title="A short name for the link, e.g. GST sheet">
+          <input name="url" type="url" required class="input input-sm w-full" placeholder="https://..." aria-label="Web address" title="Paste a web address, e.g. a Google Drive link">
+          <button class="btn btn-sm" title="Copy this web link to every future task of this rule">Add link</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div x-show="tab === 'comment'" x-cloak>
+      <p class="text-sm text-base-content/70 mb-1">Talk about the rule itself, e.g. "Should we move this to day 10?". Comments are not copied to the tasks.</p>
+      {% for comment in comments %}
+        <div class="py-2 border-b border-base-200">
+          <div class="text-xs text-base-content/70">{{ comment.created_by.get_full_name|default:comment.created_by|default:"Unknown" }}, {{ comment.created_at|date:"d-m-Y H:i" }}</div>
+          <div class="whitespace-pre-line">{{ comment.text }}</div>
+        </div>
+      {% empty %}
+        <p class="text-sm text-base-content/70">No comments yet.</p>
+      {% endfor %}
+      <form hx-post="{% url 'tasks:rule_comment' rule.pk %}" class="mt-3 flex flex-col gap-2">
+        <textarea name="text" rows="2" required class="textarea textarea-sm w-full" placeholder="Write a comment" aria-label="Comment"></textarea>
+        <button class="btn btn-sm self-start" title="Post the comment. People on this repeating task see it in their bell.">Post comment</button>
+      </form>
+    </div>
 
     <h3 class="font-medium mt-5 mb-1" title="The latest tasks this rule has made">Tasks made by this rule</h3>
     {% if tasks_made %}
@@ -114,5 +156,99 @@
     {% else %}
       <p class="text-sm text-base-content/70">No tasks yet. The daily job makes them when their time comes.</p>
     {% endif %}
+
+  {% else %}
+    {# A new rule: every tab is sent with one click. novalidate: the server shows each error on its own tab. #}
+    <form hx-post="{% url 'tasks:rule_new' %}" hx-encoding="multipart/form-data" novalidate>
+      <div role="tablist" class="tabs tabs-border mb-3">
+        <button type="button" role="tab" class="tab" :class="tab === 'details' && 'tab-active'" @click="tab = 'details'" title="Title, owner, when it repeats and the other fields">
+          Details{% if tab_errors.details %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+        </button>
+        <button type="button" role="tab" class="tab" :class="tab === 'actions' && 'tab-active'" @click="tab = 'actions'" title="Small steps copied to every task of this rule">
+          Actions (<span x-text="actions.length">{{ parts.action_rows|length }}</span>){% if tab_errors.actions %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+        </button>
+        <button type="button" role="tab" class="tab" :class="tab === 'files' && 'tab-active'" @click="tab = 'files'" title="Files and web links copied to every task of this rule">
+          Files &amp; links (<span x-text="fileCount + links.length">{{ parts.link_rows|length }}</span>){% if tab_errors.files %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+        </button>
+        <button type="button" role="tab" class="tab" :class="tab === 'comment' && 'tab-active'" @click="tab = 'comment'" title="A first note about this rule. Not copied to the tasks.">
+          Comments{% if tab_errors.comment %}<span class="text-error ml-1" title="Something on this tab needs fixing">●</span>{% endif %}
+        </button>
+      </div>
+
+      <div x-show="tab === 'details'">
+        {% if companies %}
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">Company</legend>
+            <select name="company" class="select select-sm w-full" hx-get="{% url 'tasks:rule_new' %}" hx-include="closest form"
+                    title="The repeating task and its people belong to this company">
+              {% for item in companies %}<option value="{{ item.pk }}"{% if item.pk == company.pk %} selected{% endif %}>{{ item }}</option>{% endfor %}
+            </select>
+          </fieldset>
+        {% else %}
+          <input type="hidden" name="company" value="{{ company.pk }}">
+        {% endif %}
+        {% include "tasks/partials/rule_fields.html" %}
+      </div>
+
+      <div x-show="tab === 'actions'" x-cloak>
+        {% for error in parts.errors.actions %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+        <p class="text-sm text-base-content/70 mb-2" x-show="!actions.length">No actions yet. Add the small steps every task needs, e.g. "Send data to CA", 3 days before the due date.</p>
+        <template x-for="(row, index) in actions" :key="row.key">
+          <div class="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_9rem_7rem_auto] gap-2 mb-2 items-center">
+            <input name="action_title" x-model="row.title" maxlength="200" class="input input-sm w-full"
+                   placeholder="What has to be done" :aria-label="'Action ' + (index + 1)" title="What has to be done">
+            <button type="button" class="btn btn-ghost btn-xs text-error sm:order-last" @click="actions.splice(index, 1)"
+                    title="Remove this action" :aria-label="'Remove action ' + (index + 1)">✕</button>
+            <select name="action_owner" x-model="row.owner" class="select select-sm w-full" title="Who does this action">
+              <option value="">Pick a person</option>
+              {% for person in people %}<option value="{{ person.pk }}">{{ person.get_full_name|default:person.email }}</option>{% endfor %}
+            </select>
+            <label class="flex items-center gap-1 text-sm" title="Days before the task's due date. 0 = on the due date.">
+              <input type="number" name="action_days_before_due" x-model="row.days_before_due" min="0" max="365" class="input input-sm w-16">
+              <span class="whitespace-nowrap">days before</span>
+            </label>
+          </div>
+        </template>
+        <button type="button" class="btn btn-sm" @click="addAction()" title="Add a small step. It starts with the rule's owner, on the due date.">+ Add action</button>
+      </div>
+
+      <div x-show="tab === 'files'" x-cloak>
+        <p class="text-sm text-base-content/70 mb-2">Each task of this rule gets its own copy of these files and links. Example: an Excel template to fill in every month.</p>
+        {% for error in parts.errors.files %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+        {% if files_lost %}<div role="alert" class="alert alert-warning alert-soft text-sm mb-2">Files are not kept when the form has an error. Please choose them again.</div>{% endif %}
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Files</legend>
+          <input type="file" name="files" multiple class="file-input file-input-sm w-full" @change="fileCount = $event.target.files.length"
+                 accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx,.csv" title="PDF, JPG, PNG, Excel, Word or CSV, up to 10 MB each">
+          <p class="label whitespace-normal">PDF, JPG, PNG, Excel, Word or CSV, up to 10 MB each. You can choose several.</p>
+        </fieldset>
+        <h3 class="font-medium mt-3 mb-1">Links</h3>
+        {% for error in parts.errors.links %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+        <template x-for="(row, index) in links" :key="row.key">
+          <div class="grid grid-cols-[1fr_auto] sm:grid-cols-[10rem_1fr_auto] gap-2 mb-2 items-center">
+            <input name="link_label" x-model="row.label" maxlength="200" class="input input-sm w-full"
+                   placeholder="Name, e.g. GST sheet" title="A short name for the link">
+            <button type="button" class="btn btn-ghost btn-xs text-error sm:order-last" @click="links.splice(index, 1)"
+                    title="Remove this link" :aria-label="'Remove link ' + (index + 1)">✕</button>
+            <input type="url" name="link_url" x-model="row.url" maxlength="500" class="input input-sm w-full col-span-2 sm:col-span-1"
+                   placeholder="https://…" title="The web address, e.g. a Google Drive file">
+          </div>
+        </template>
+        <button type="button" class="btn btn-sm" @click="links.push({ key: nextKey++, label: '', url: '' })" title="Add a web link, e.g. a Google Drive file">+ Add link</button>
+      </div>
+
+      <div x-show="tab === 'comment'" x-cloak>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">{{ form.comment.label }}</legend>
+          {{ form.comment }}
+          {% for error in form.comment.errors %}<p class="label text-error whitespace-normal">{{ error }}</p>{% endfor %}
+          <p class="label whitespace-normal">About the rule itself, e.g. "Moved to day 11 from Dec". It is not copied to the tasks; tips every task should carry go in the Description.</p>
+        </fieldset>
+      </div>
+
+      <div class="mt-4">
+        <button class="btn btn-primary btn-sm" title="Save the repeating task with its actions, files, links and comment. Its tasks will be made by the daily job.">Create repeating task</button>
+      </div>
+    </form>
   {% endif %}
 </aside>

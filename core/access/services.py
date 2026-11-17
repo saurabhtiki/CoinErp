@@ -270,10 +270,19 @@ def users_for_app(company, app_code):
 
 def can_change_files(user, record):
     """Files may be added on records the user can see, but not while the record waits for approval or once
-    it is approved (the approver must see exactly what they approved)."""
-    return can_see_record(user, record) and not record_is_locked(record)
+    it is approved (the approver must see exactly what they approved).
+
+    A model with `files_by_managers_only = True` takes files only from people who may change the record.
+    Example: a repeating task rule, whose files are copied to every task it makes.
+    """
+    if not can_see_record(user, record) or record_is_locked(record):
+        return False
+    return not getattr(record, "files_by_managers_only", False) or manages_visible_record(user, record)
 
 
 def can_remove_upload(user, uploaded_by_id, record):
-    """Files are removed by whoever uploaded them, or by staff, and only while the files may change."""
-    return can_change_files(user, record) and (uploaded_by_id == user.pk or can_use_admin(user))
+    """Files are removed by whoever uploaded them, or by staff, and only while the files may change.
+    On a `files_by_managers_only` record, anyone who may change the record removes them."""
+    return can_change_files(user, record) and (
+        uploaded_by_id == user.pk or can_use_admin(user) or getattr(record, "files_by_managers_only", False)
+    )

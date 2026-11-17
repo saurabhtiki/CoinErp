@@ -13,7 +13,7 @@ from django.views import View
 from django_datatable import CHOICE, DATE, NUMBER, Column, DataTable, table_response
 
 from core.access.mixins import AppAccessRequiredMixin
-from core.access.services import companies_for_app
+from core.access.services import can_change_files, companies_for_app
 from core.files import services as files
 
 from . import services
@@ -197,6 +197,7 @@ def panel(request, task, form=None, tab="actions", error="", action_form=None, s
         "comments": task.comments.select_related("created_by"),
         "items": items,
         "upload_url": reverse("files:record", args=["tasks", "task", task.pk]),
+        "can_upload": can_change_files(user, task),
         "tab": tab if tab in TABS else "actions",
         "panel_error": error,
         "today": timezone.localdate(),
