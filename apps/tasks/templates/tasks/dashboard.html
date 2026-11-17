@@ -27,8 +27,21 @@
   <noscript><button class="btn btn-sm">Apply</button></noscript>
 </form>
 
+<h2 class="text-lg font-semibold mb-2" title="Tasks not yet completed">Tasks</h2>
 <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
   {% for card in cards %}
+    <a href="{{ card.url }}" class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow" title="{{ card.tooltip }}. Click to see them.">
+      <div class="card-body p-4">
+        <div class="text-sm text-base-content/70">{{ card.label }}</div>
+        <div class="text-3xl font-bold {% if card.count %}{{ card.colour }}{% endif %}">{{ card.count }}</div>
+      </div>
+    </a>
+  {% endfor %}
+</div>
+
+<h2 class="text-lg font-semibold mb-2" title="Small steps inside open tasks, not yet ticked done">Actions</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  {% for card in action_cards %}
     <a href="{{ card.url }}" class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow" title="{{ card.tooltip }}. Click to see them.">
       <div class="card-body p-4">
         <div class="text-sm text-base-content/70">{{ card.label }}</div>

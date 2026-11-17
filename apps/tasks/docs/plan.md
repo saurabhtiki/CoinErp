@@ -1,6 +1,6 @@
 # Tasks: Phase T5 plan (Dashboard: open actions, drill-down, filters)
 
-Status (2026-11-17): Part A done (filters, drill-down). Part B (open actions) waiting for OK.
+Status (2026-11-17): T5 done. Part A (filters, drill-down) and Part B (open actions) built, tested and committed.
 Still open from T3: Part D (import from the old Sheet), to be built when the CSV files are shared.
 T1-T4 are done (see git history for their plans).
 
@@ -74,6 +74,11 @@ Example: Amar -> Open actions 3, Overdue actions 1.
   also pick a colleague whose shared task they see.
 - A refused filter shows a yellow note on the page (not a pop-up message), so it is seen after an HTMX change.
 - After a filter change the address may hold empty filters, e.g. `?company=&priority=high`. Harmless.
+- People table: a row also appears for someone who has open actions on tasks you look after, even with no
+  task of their own (e.g. Amar: 0 open tasks, 2 open actions).
+- You are always in the Person list (so "My open actions" works even if you own nothing yet).
+- The Actions list has a "My actions" button instead of a "Mine" shortcut button.
+- Tests: `tests/test_tasks_dashboard_filters.py` (Part A) and `tests/test_tasks_dashboard_actions.py` (Part B).
 
 ## Finish
 `uv run pytest`, click through in the browser (filters, each kind of drill-down, Actions list), `/code-review`,

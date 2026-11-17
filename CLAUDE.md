@@ -2,7 +2,7 @@
 
 Group ERP platform (see `project.md`): one shared `core` + plug-in apps in `apps/`. Keep each app self-contained so it could be reused elsewhere.
 
-Current phase: Phase 3 Pilot (Tasks app): T1-T4 done, T5 Part A done (Sheet import postponed), Core Step 11 (deploy + sandbox) done. Plan: `apps/tasks/docs/plan.md`.
+Current phase: Phase 3 Pilot (Tasks app): T1-T5 done (Sheet import postponed), Core Step 11 (deploy + sandbox) done. Plan: `apps/tasks/docs/plan.md`.
 
 
 

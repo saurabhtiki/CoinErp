@@ -1,0 +1,10 @@
+<tr>
+  <td data-dt-col="title" class="dt-sticky font-medium">{{ row.title }}</td>
+  <td data-dt-col="task_title">
+    <a href="{% url 'tasks:detail' row.task_id %}" hx-get="{% url 'tasks:detail' row.task_id %}?tab=actions" hx-target="#task-panel" hx-swap="innerHTML" hx-push-url="false"
+       class="link link-hover" title="Open this task on its Actions tab">{{ row.task.code }} {{ row.task_title }}</a>
+  </td>
+  <td data-dt-col="owner_name">{{ row.owner_name }}</td>
+  <td data-dt-col="due_date" class="whitespace-nowrap{% if row.due_group == 'overdue' %} text-error font-medium{% endif %}">{{ row.due_date|date:"d-m-Y" }}</td>
+  <td data-dt-col="due_group" class="whitespace-nowrap{% if row.due_group == 'overdue' %} text-error{% endif %}">{% if row.due_group == 'overdue' %}Overdue{% elif row.due_group == 'today' %}Due today{% elif row.due_group == 'week' %}Next 7 days{% else %}Later{% endif %}</td>
+</tr>

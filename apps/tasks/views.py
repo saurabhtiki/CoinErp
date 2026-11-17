@@ -55,7 +55,22 @@ PEOPLE_COLUMNS = [
     Column("overdue_count", "Overdue", type=NUMBER),
     Column("done_count", "Done this month", type=NUMBER),
     Column("on_time_percent", "On time %", type=NUMBER),
+    Column("open_actions_count", "Open actions", type=NUMBER),
+    Column("overdue_actions_count", "Overdue actions", type=NUMBER),
 ]
+ACTION_COLUMNS = [
+    Column("title", "Action"),
+    Column("task_title", "Task"),
+    Column("owner_name", "Person", type=CHOICE),
+    Column("due_date", "Due date", type=DATE),
+    Column("due_group", "When", type=CHOICE, choices={k: v for k, v in services.DUE_GROUPS.items() if k != "done"}),
+]
+ACTION_SHORTCUTS = (
+    ("All", "due_group", "", "Show every open action"),
+    ("Due today", "due_group", "today", "Only actions due today"),
+    ("Next 7 days", "due_group", "week", "Only actions due in the coming 7 days"),
+    ("Overdue", "due_group", "overdue", "Only actions that are late"),
+)
 # The dashboard cards: (key in dashboard_numbers, label, list, filter, colour, tooltip)
 CARDS = (
     ("overdue", "Overdue", "all", "due_group=overdue", "text-error", "Due date has passed and the task is not completed"),
@@ -63,6 +78,13 @@ CARDS = (
     ("week", "Next 7 days", "all", "due_group=week", "text-info", "Open tasks due in the coming 7 days (not today)"),
     ("review", "For my review", "review", "", "text-primary", "Tasks sent to you for a check"),
     ("blocked", "Blocked", "all", "status=blocked", "text-error", "Open tasks marked Blocked"),
+)
+# The action cards: (key in dashboard_numbers()["action_cards"], label, filter, colour, tooltip)
+ACTION_CARDS = (
+    ("overdue", "Overdue actions", "due_group=overdue", "text-error", "Open actions whose due date has passed"),
+    ("today", "Actions due today", "due_group=today", "text-warning", "Open actions due today"),
+    ("week", "Actions next 7 days", "due_group=week", "text-info", "Open actions due in the coming 7 days (not today)"),
+    ("mine", "My open actions", "", "text-primary", "Open actions given to you"),
 )
 
 
@@ -172,6 +194,13 @@ class DashboardView(TasksView):
             }
             for key, label, list_slug, query, colour, tooltip in CARDS
         ]
+        action_cards = [
+            {
+                "label": label, "count": numbers["action_cards"][key], "colour": colour, "tooltip": tooltip,
+                "url": actions_url({**filters, "person": str(request.user.pk)} if key == "mine" else filters, query),
+            }
+            for key, label, query, colour, tooltip in ACTION_CARDS
+        ]
         open_query = "&".join(f"due_group={group}" for group in OPEN_GROUPS)
         charts = {
             "status": {
@@ -190,7 +219,7 @@ class DashboardView(TasksView):
         }
         context = {
             "table": table, "title": "Dashboard", "lists": LISTS, "tab": "dashboard", "cards": cards, "charts": charts,
-            "filters": filters, "problems": problems, "filter_fields": [
+            "action_cards": action_cards, "filters": filters, "problems": problems, "filter_fields": [
                 (name, name.title(), options, filters.get(name, ""))
                 for name, options in choices.items()
             ],
@@ -215,6 +244,14 @@ def drill_url(list_slug, filters, query=""):
     return reverse("tasks:list", args=[list_slug]) + (f"?{query}" if query else "")
 
 
+def actions_url(filters, query=""):
+    """An Actions list link with the dashboard filters. Person = the action's person.
+    Example: actions_url({"company": "2"}, "due_group=overdue") -> "/tasks/actions/?company=2&due_group=overdue"
+    """
+    query = "&".join(part for part in (urlencode(filters), query) if part)
+    return reverse("tasks:actions") + (f"?{query}" if query else "")
+
+
 def person_urls(filters, open_query):
     """Links for the People rows, without the person: each row adds "&person=<its id>" (each link has a "?")."""
     base = {name: value for name, value in filters.items() if name != "person"}
@@ -222,7 +259,30 @@ def person_urls(filters, open_query):
         "open": drill_url("all", base, open_query),
         "overdue": drill_url("all", base, "due_group=overdue"),
         "done": drill_url("all", base, "done=month"),
+        "open_actions": actions_url(base) + ("" if base else "?"),
+        "overdue_actions": actions_url(base, "due_group=overdue"),
     }
+
+
+class ActionListView(TasksView):
+    """Open actions on open tasks the user may see. Example: /tasks/actions/?person=5&due_group=overdue.
+    A row opens its task's panel on the Actions tab, where it can be ticked done."""
+
+    def get(self, request):
+        picked_any = any(request.GET.get(name) for name in FILTERS)
+        choices = services.filter_choices(request.user) if picked_any else {}
+        filters, problems = services.read_filters(request.user, request.GET, choices=choices)
+        rows = services.filtered(services.visible_open_actions(request.user), filters, via="task__")
+        rows = rows.select_related("task")  # each row shows its task number
+        notes = [dict(choices[name])[value] for name, value in filters.items()]
+        table = DataTable(
+            request.GET, rows, ACTION_COLUMNS, table_id="actions-table", default_sort=("due_date",),
+            base_url=request.path, search_fields=("title", "task__title"), search_placeholder="Search actions",
+            shortcuts=ACTION_SHORTCUTS, noun="actions", keep=FILTERS,
+        )
+        context = {"table": table, "title": "Open actions", "lists": LISTS, "tab": "actions", "notes": notes,
+                   "problems": problems}
+        return table_response(request, table, "tasks/actions.html", "tasks/partials/actions_table.html", context)
 
 
 def panel(request, task, form=None, tab="actions", error="", action_form=None, status=200):
@@ -271,7 +331,8 @@ def list_behind(request):
     """Address of the list the panel was opened over, or "" when the panel is a page of its own."""
     current = request.headers.get("HX-Current-URL", "")
     path = urlsplit(current).path
-    if request.htmx and (path.startswith("/tasks/list/") or path in (reverse("tasks:rules"), reverse("tasks:calendar"))):
+    lists = (reverse("tasks:rules"), reverse("tasks:calendar"), reverse("tasks:actions"))
+    if request.htmx and (path.startswith("/tasks/list/") or path in lists):
         return current
     return ""
 

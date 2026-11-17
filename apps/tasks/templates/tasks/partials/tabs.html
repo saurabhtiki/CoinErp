@@ -5,6 +5,7 @@
   {% for slug, item in lists.items %}
     <a role="tab" href="{% url 'tasks:list' slug %}" class="tab whitespace-nowrap{% if slug == tab %} tab-active{% endif %}" title="{{ item.2 }}">{{ item.0 }}</a>
   {% endfor %}
+  <a role="tab" href="{% url 'tasks:actions' %}" class="tab whitespace-nowrap{% if tab == 'actions' %} tab-active{% endif %}" title="Open actions on open tasks: small steps not yet ticked done">Actions</a>
   <a role="tab" href="{% url 'tasks:rules' %}" class="tab whitespace-nowrap{% if tab == 'rules' %} tab-active{% endif %}" title="Rules that make the same task again and again, e.g. a tax return every month">Repeating</a>
   <a role="tab" href="{% url 'tasks:holidays' %}" class="tab whitespace-nowrap{% if tab == 'holidays' %} tab-active{% endif %}" title="Days off: repeating tasks avoid these dates">Holidays</a>
 </div>

@@ -14,7 +14,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Case, Count, F, IntegerField, Max, Q, Value, When
+from django.db.models import Case, Count, F, IntegerField, Max, OuterRef, Q, Subquery, Value, When
+from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
 
@@ -116,11 +117,15 @@ NO_CATEGORY = "__blank__"  # the category filter value for tasks without a categ
 
 
 def filter_choices(user):
-    """What the dashboard filter bar offers: the user's Tasks companies, the owners of tasks they may see,
-    category names in their companies, and priorities. Example: {"company": [(2, "Acme")], ...}."""
+    """What the dashboard filter bar offers: the user's Tasks companies, the user and everyone who owns a task
+    or an action they may see, category names in their companies, and priorities.
+    Example: {"company": [("2", "Acme")], "person": [("5", "Het Shah"), ...], ...}."""
     companies = companies_for_app(user, "tasks")
-    owner_ids = Task.objects.for_user(user).filter(is_active=True).order_by().values("owner")
-    people = User.objects.filter(pk__in=owner_ids).order_by("first_name", "last_name")
+    seen = Task.objects.for_user(user).filter(is_active=True).order_by()
+    people = User.objects.filter(
+        Q(pk=user.pk) | Q(pk__in=seen.values("owner"))
+        | Q(pk__in=TaskAction.objects.filter(task__in=seen.values("pk")).values("owner"))
+    ).order_by("first_name", "last_name")
     names = TaskCategory.objects.filter(company__in=companies).order_by("name").values_list("name", flat=True)
     return {
         "company": [(str(company.pk), company.name) for company in companies.order_by("name")],
@@ -152,19 +157,40 @@ def read_filters(user, params, names=("company", "person", "category", "priority
     return picked, problems
 
 
-def filtered(tasks, filters):
-    """Tasks narrowed by read_filters() values. Person = the task owner. Example: filtered(qs, {"priority": "high"})."""
+def filtered(rows, filters, via=""):
+    """Tasks (or actions, with via="task__") narrowed by read_filters() values.
+    Person = the row's own owner: the task owner for tasks, the action's person for actions.
+    Example: filtered(tasks, {"priority": "high"}); filtered(actions, {"company": "2"}, via="task__")."""
     if "company" in filters:
-        tasks = tasks.filter(company_id=filters["company"])
+        rows = rows.filter(**{f"{via}company_id": filters["company"]})
     if "person" in filters:
-        tasks = tasks.filter(owner_id=filters["person"])
+        rows = rows.filter(owner_id=filters["person"])
     if filters.get("category") == NO_CATEGORY:
-        tasks = tasks.filter(category__isnull=True)
+        rows = rows.filter(**{f"{via}category__isnull": True})
     elif "category" in filters:
-        tasks = tasks.filter(category__name=filters["category"])
+        rows = rows.filter(**{f"{via}category__name": filters["category"]})
     if "priority" in filters:
-        tasks = tasks.filter(priority=filters["priority"])
-    return tasks
+        rows = rows.filter(**{f"{via}priority": filters["priority"]})
+    return rows
+
+
+def visible_open_actions(user, today=None):
+    """Actions not ticked done, on active, not completed tasks this user may see, with what the Actions list shows.
+
+    Example: "Send data to CA" (Amar, due 18 Nov) on Het's open GSTR1 -> due_group "week" on 17 Nov.
+    """
+    today = today or timezone.localdate()
+    open_task_ids = Task.objects.for_user(user).filter(is_active=True).exclude(status=Status.COMPLETED).values("pk")
+    return TaskAction.objects.filter(task__in=open_task_ids, is_done=False).annotate(
+        due_group=Case(
+            When(due_date__lt=today, then=Value("overdue")),
+            When(due_date=today, then=Value("today")),
+            When(due_date__lte=today + timedelta(days=7), then=Value("week")),
+            default=Value("later"),
+        ),
+        task_title=F("task__title"),
+        owner_name=F("owner__first_name"),
+    )
 
 
 def done_this_month(tasks, today=None):
@@ -183,6 +209,15 @@ def dashboard_numbers(user, today=None, filters=None):
     # Same rows as visible_tasks(), without the list's extra columns, so the counts group cleanly.
     open_tasks = Task.objects.for_user(user).filter(is_active=True).exclude(status=Status.COMPLETED).order_by()
     open_tasks = filtered(open_tasks, filters or {})
+    actions = filtered(visible_open_actions(user, today), filters or {}, via="task__").order_by()
+    action_cards = actions.aggregate(
+        overdue=Count("pk", filter=Q(due_date__lt=today)),
+        today=Count("pk", filter=Q(due_date=today)),
+        week=Count("pk", filter=Q(due_date__gt=today, due_date__lte=today + timedelta(days=7))),
+    )
+    # "Mine" is always the user's own actions, whatever the Person filter says.
+    others = {name: value for name, value in (filters or {}).items() if name != "person"}
+    action_cards["mine"] = filtered(visible_open_actions(user, today), others, via="task__").filter(owner=user).count()
     cards = open_tasks.aggregate(
         overdue=Count("pk", filter=Q(due_date__lt=today)),
         today=Count("pk", filter=Q(due_date=today)),
@@ -201,25 +236,44 @@ def dashboard_numbers(user, today=None, filters=None):
         for row in open_tasks.values("category__name").annotate(total=Count("pk")).order_by("-total", "category__name")
     ]
     by_status = [(status, status_names[status], total) for status, total in by_status]
-    return {"cards": cards, "by_status": by_status, "by_category": by_category}
+    return {"cards": cards, "action_cards": action_cards, "by_status": by_status, "by_category": by_category}
 
 
 def people_numbers(user, today=None, filters=None):
     """One row per person whose tasks I look after (me, my team, or everyone where I am admin):
     open, overdue, done this month and on-time % (done by the due date, out of done this month).
+    Also open and overdue actions: open actions on those tasks' open ones, counted by the action's person.
     `filters` narrows the tasks counted (and, for Person, the rows).
 
     Example: Het -> open 4, overdue 1, done 8, on time 75. No task done this month -> on time None ("–").
+             Amar (an action on Het's task) -> open actions 1, and 0 for his own tasks.
     """
     today = today or timezone.localdate()
     month_start = today.replace(day=1)
-    team_tasks = filtered(team_rows(Task.objects.filter(is_active=True), user), filters or {})
+    filters = filters or {}
+    all_team_tasks = team_rows(Task.objects.filter(is_active=True), user)
+    team_tasks = filtered(all_team_tasks, filters)
+    others = {name: value for name, value in filters.items() if name != "person"}
+    action_tasks = filtered(all_team_tasks, others).exclude(status=Status.COMPLETED)
+    actions = TaskAction.objects.filter(task__in=action_tasks.values("pk"), is_done=False)
+    if "person" in filters:
+        actions = actions.filter(owner_id=filters["person"])
+
+    def count_actions(*conditions):
+        return Coalesce(Subquery(
+            actions.filter(*conditions, owner=OuterRef("pk")).order_by().values("owner")
+            .annotate(total=Count("pk")).values("total")
+        ), 0)
+
     team_task_ids = team_tasks.values("pk")
     mine = Q(owned_tasks__in=team_task_ids)
     is_open = mine & ~Q(owned_tasks__status=Status.COMPLETED)
     done = mine & Q(owned_tasks__status=Status.COMPLETED, owned_tasks__completed_at__date__gte=month_start)
     on_time = done & Q(owned_tasks__completed_at__date__lte=F("owned_tasks__due_date"))
-    rows = User.objects.filter(pk__in=team_tasks.values("owner")).annotate(
+    rows = User.objects.filter(Q(pk__in=team_tasks.values("owner")) | Q(pk__in=actions.values("owner"))).annotate(
+        open_actions_count=count_actions(),
+        overdue_actions_count=count_actions(Q(due_date__lt=today)),
+    ).annotate(
         open_count=Count("owned_tasks", filter=is_open, distinct=True),
         overdue_count=Count("owned_tasks", filter=is_open & Q(owned_tasks__due_date__lt=today), distinct=True),
         done_count=Count("owned_tasks", filter=done, distinct=True),

@@ -4,4 +4,6 @@
   <td data-dt-col="overdue_count" class="text-right{% if row.overdue_count %} text-error font-medium{% endif %}"><a href="{{ person_urls.overdue }}&person={{ row.pk }}" class="link link-hover" title="Open tasks whose due date has passed. Click to see them.">{{ row.overdue_count }}</a></td>
   <td data-dt-col="done_count" class="text-right"><a href="{{ person_urls.done }}&person={{ row.pk }}" class="link link-hover" title="Tasks completed since the 1st of this month. Click to see them.">{{ row.done_count }}</a></td>
   <td data-dt-col="on_time_percent" class="text-right" title="{{ row.on_time_count }} of {{ row.done_count }} completed by the due date">{% if row.on_time_percent is None %}–{% else %}{{ row.on_time_percent }}%{% endif %}</td>
+  <td data-dt-col="open_actions_count" class="text-right"><a href="{{ person_urls.open_actions }}&person={{ row.pk }}" class="link link-hover" title="Actions given to this person, not yet ticked done. Click to see them.">{{ row.open_actions_count }}</a></td>
+  <td data-dt-col="overdue_actions_count" class="text-right{% if row.overdue_actions_count %} text-error font-medium{% endif %}"><a href="{{ person_urls.overdue_actions }}&person={{ row.pk }}" class="link link-hover" title="Open actions of this person whose due date has passed. Click to see them.">{{ row.overdue_actions_count }}</a></td>
 </tr>
